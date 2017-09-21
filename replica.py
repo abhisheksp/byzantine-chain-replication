@@ -7,7 +7,6 @@ class Replica:
         self.next = next_r
         self.cache = {}
 
-        # TODO: self.cache
         if previous_r is None:
             self.type = 'HEAD'
         elif next_r is None:
@@ -37,7 +36,10 @@ class Replica:
         self.object_state, result = self.object_state(operation)
         # add sign(order_statement) to order_proof
         # add order_proof to history
+
         # cache <client_id, operation, _>
+        self.cache[(client, operation)] = None
+
         # add sign(result_statement) to result_proof
         # forward Shuttle(<order_proof, result_proof>) if any
         # init_timer
@@ -46,17 +48,17 @@ class Replica:
         # cancel_timer on valid result
         pass
 
-    def receive_request_shuttle(self, request_shuttle):
-        # client = request.client
+    def receive_request_shuttle(self, request):
+        client = request.client
         # verify client
-        operation = request_shuttle.operation
+        operation = request.operation
         # return result if <client_id, operation, result> in cache
         # common
         # verify order_proof
         self.object_state, result = self.object_state(operation)
         # add sign(order_statement) to order_proof
         # add order_proof to history
-        # cache < client_id, operation, _ >
+        self.cache[(client, operation)] = None
         # add sign(result_statement) to result_proof
         # forward Shuttle(<order_proof, result_proof>) if any
         if self.type == 'TAIL':
@@ -71,9 +73,11 @@ class Replica:
             pass
         pass
 
-    def receive_result_shuttle(self, result_shuttle):
+    def receive_result_shuttle(self, result):
         # verify
+        client, operation = result.client, result.operation
         # cache <client_id, operation, result>
+        self.cache[(client, operation)] = result
         # forward result_shuttle to previous if any
         pass
 
