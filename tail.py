@@ -1,22 +1,11 @@
-from enum import Enum
+from constants import *
 from message import *
 from timer import Timer
 
 
-class Mode(Enum):
-    ACTIVE = 1
-    PENDING = 2
-    IMMUTABLE = 3
-
-
-class Type(Enum):
-    HEAD = 1
-    INTERNAL = 2
-    TAIL = 3
-
-
 class Replica:
     def __init__(self, config, previous_r=None, next_r=None):
+        self.id = uuid.uuid4()
         self.running_state = config.init_object
         self.mode = config.mode  # Mode
         self.history = []  # ordered sequence
@@ -25,11 +14,9 @@ class Replica:
         self.cache = {}
         self.timer = Timer(config.timeout)
         self.configuration_id = self.configuration_id
-
-        if next_r is None:
-            self.type = Type.TAIL
-        else:
-            self.type = Type.INTERNAL
+        self.olympus = config.olympus
+        self.type = Type.TAIL
+        self.type = Type.INTERNAL
 
     def is_consistent(self, order_statements):
         slots_consistent = all(order_statements[0]['slot'] == order_statement['slot'] for order_statement in order_statements)
@@ -153,7 +140,6 @@ class Replica:
         # forward result_shuttle to previous
         pass
 
-    # TODO: Add self.id and self.olympus
     def receive_wedge_request(self, request):
         # Create a new wedge statement
         wedgeStatement = ('wedged', self.id, self.running_state, self.history)

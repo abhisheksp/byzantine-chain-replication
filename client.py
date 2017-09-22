@@ -27,7 +27,7 @@ class Client:
         timer = self.timer.new_timer()
         timer.start()
         # -- receive yield point
-        # await until time out or received
+        # await until time out or received a response
         await(timer.timed_out() or (request, _) in received)
 
         # timeout
@@ -40,3 +40,6 @@ class Client:
     def receive_handler(self, response):
         receive(response)
         # verify result_proof
+        result, result_proof = response
+        verify result_proof
+

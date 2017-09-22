@@ -1,22 +1,10 @@
-from enum import Enum
+from constants import *
 from message import *
 from timer import Timer
 
-
-class Mode(Enum):
-    ACTIVE = 1
-    PENDING = 2
-    IMMUTABLE = 3
-
-
-class Type(Enum):
-    HEAD = 1
-    INTERNAL = 2
-    TAIL = 3
-
-
 class Replica:
     def __init__(self, config, previous_r=None, next_r=None):
+        self.id = uuid.uuid4()
         self.running_state = config.init_object
         self.mode = config.mode     # Mode
         self.history = []   # ordered sequence
@@ -24,11 +12,9 @@ class Replica:
         self.next = next_r
         self.cache = {}
         self.timer = Timer(config.timeout)
-
-        if next_r is None:
-            self.type = Type.TAIL
-        else:
-            self.type = Type.INTERNAL
+        self.olympus = config.olympus
+        self.configuration_id = self.configuration_id
+        self.type = Type.INTERNAL
 
     def receive_handler(self, request):
         if self.mode == Mode.IMMUTABLE:
@@ -76,7 +62,6 @@ class Replica:
             client, operation = request.client, request.operation
             await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
             if timer.timed_out():
-                # TODO: Handle error case
                 reconfigure_request = ReconfigureRequest()
                 send(reconfigure_request, to=self.olympus)
                 return
@@ -162,7 +147,6 @@ class Replica:
         # forward result_shuttle to previous
         pass
 
-#TODO: Add self.id and self.olympus
     def receive_wedge_request(self, request):
         # Create a new wedge statement
         wedgeStatement = ('wedged', self.id, self.running_state, self.history)

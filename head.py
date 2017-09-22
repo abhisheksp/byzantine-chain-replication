@@ -1,22 +1,11 @@
-from enum import Enum
 from message import *
+from constants import *
 from timer import Timer
-
-
-class Mode(Enum):
-    ACTIVE = 1
-    PENDING = 2
-    IMMUTABLE = 3
-
-
-class Type(Enum):
-    HEAD = 1
-    INTERNAL = 2
-    TAIL = 3
 
 
 class Head:
     def __init__(self, config, previous_r=None, next_r=None):
+        self.id = uuid.uuid4()
         self.running_state = config.init_object
         self.mode = config.mode  # Mode
         self.history = []  # ordered sequence
@@ -25,11 +14,11 @@ class Head:
         self.cache = {}
         self.timer = Timer(config.timeout)
         self.type = Type.HEAD
-
-        #add
+        self.olympus = config.olympus
         self.configuration_id = self.configuration_id
 
         #add checkpointing
+        # TODO: async?
         checkpoint()
 
     def generate_slot(self):
@@ -73,9 +62,6 @@ class Head:
             timer.stop()
             # send <result, result_proof> to client
             send((result, result_proof), request.client)
-            # forward result_proof ack to previous if any
-            send(result_proof, self.previous)
-            return
 
         # new raw request
         else:
@@ -121,15 +107,13 @@ class Head:
         # cache <client_id, operation, result>
         self.cache[(client, operation)] = result
 
-#TODO: Add self.id and self.olympus
     def receive_wedge_request(self, request):
         # Create a new wedge statement
         wedgeStatement = ('wedged', self.id, self.running_state, self.history)
-        #Send the statement to Olympus
+        # Send the statement to Olympus
         send(wedgeStatement,to=self.olympus)
-        #set the replica state to Immutable
+        # set the replica state to Immutable
         self.mode = 'IMMUTABLE'
-
 
     def receive_catchup_messges(self, request):
         #wait until all order proofs are in replica's history
@@ -137,7 +121,7 @@ class Head:
         #send running state message to Olympus
         send(self.running_state,to=olympus)
 
-#TODO: Checkpoint timer not declared in class variables
+# TODO: Checkpoint timer not declared in class variables
     def checkpoint(self):
         while true:
             checkpoint_shuttle = {}
