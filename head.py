@@ -16,13 +16,14 @@ class Head:
         self.type = Type.HEAD
         self.olympus = config.olympus
         self.configuration_id = self.configuration_id
+        self.current_slot_id = 0
 
         # TODO: async?
         checkpoint()
 
     def generate_slot(self):
-        # generates increasing id
-        pass
+        self.current_slot_id += 1
+        return self.current_slot_id
 
     def receive_handler(self, request):
         if self.mode == Mode.IMMUTABLE:
@@ -65,8 +66,6 @@ class Head:
             return
         # cancel_timer on valid result
         timer.stop()
-        # send <result, result_proof> to client
-        send((result, result_proof), request.client)
 
     def handle_new_request(self, request):
         client, operation = request
@@ -110,6 +109,8 @@ class Head:
         client, operation = result.client, result.operation
         # cache <client_id, operation, result>
         self.cache[(client, operation)] = result
+        # send <result, result_proof> to client
+        send((result, result_proof), request.client)
 
     def receive_wedge_request(self, request):
         # Create a new wedge statement
@@ -119,7 +120,7 @@ class Head:
         # set the replica state to Immutable
         self.mode = 'IMMUTABLE'
 
-    def receive_catchup_messges(self, request):
+    def receive_catchup_messages(self, request):
         #wait until all order proofs are in replica's history
         await(all(order_proof in self.history for order_proof in request))
         #send running state message to Olympus

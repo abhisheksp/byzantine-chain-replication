@@ -29,10 +29,7 @@ class Tail:
 
     def verify_order_proof(self, RequestShuttle):
         order_proof = RequestShuttle['order_proof']
-            if is_consistent(order_proof['order_statements']):
-                return true
-            else: 
-                return false
+        return is_consistent(order_proof['order_statements'])
 
     def receive_handler(self, request):
         if self.mode == Mode.IMMUTABLE:
@@ -73,18 +70,10 @@ class Tail:
         if timer.timed_out():
             reconfigure_request = ReconfigureRequest()
             send(reconfigure_request, to=self.olympus)
-            # TODO: Handle error case
             return
 
         # cancel_timer on valid result          # TODO: error case
         timer.stop()
-        # TODO: Handle in response handler
-        # send <result, result_proof> to client
-        # result, result_shuttle = get result shuttle and result from cache
-        send((result, result_proof), request.client)
-        # forward result_proof ack to previous if any
-        if self.previous:
-            send(result_shuttle, self.previous)
 
     def send_cached_result(self, client, operation):
         result = self.cache[(client, operation)]
@@ -103,10 +92,6 @@ class Tail:
             return
         # cancel_timer on valid result
         timer.stop()
-        # send <result, result_proof> to client
-        send((result, result_proof), request.client)
-        # forward result_proof ack to previous if any
-        send(result_proof, self.previous)
 
     def receive_request_shuttle(self, request):
         client = request.client
@@ -145,8 +130,12 @@ class Tail:
         client, operation = result.client, result.operation
         # cache <client_id, operation, result>
         self.cache[(client, operation)] = result
-        # forward result_shuttle to previous
-        pass
+        # TODO: Handle in response handler
+        # send <result, result_proof> to client
+        # result, result_shuttle = get result shuttle and result from cache
+        send((result, result_proof), request.client)
+        # forward result_proof ack to previous
+        send(result_shuttle, self.previous)
 
     def receive_wedge_request(self, request):
         # Create a new wedge statement

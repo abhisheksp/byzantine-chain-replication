@@ -2,6 +2,7 @@ from constants import *
 from message import *
 from timer import Timer
 
+
 class Replica:
     def __init__(self, config, previous_r=None, next_r=None):
         self.id = uuid.uuid4()
@@ -26,6 +27,7 @@ class Replica:
 
         # call receive_request or receive_request_shuttle or receive_result_shuttle based on request type
         pass
+
     def is_consistent(self, order_statements):
         slots_consistent = all(order_statements[0]['slot'] == order_statement['slot'] for order_statement in order_statements)
         operations_consistent = all(order_statements[0]['operation'] == order_statement['operation'] for order_statement in order_statements)
@@ -37,10 +39,7 @@ class Replica:
 
     def verify_order_proof(self, RequestShuttle):
         order_proof = RequestShuttle['order_proof']
-            if is_consistent(order_proof['order_statements']):
-                return true
-            else: 
-                return false
+        return is_consistent(order_proof['order_statements'])
 
     # raw request
     def receive_request(self, request):
@@ -72,10 +71,6 @@ class Replica:
             return
         # cancel_timer on valid result
         timer.stop()
-        # send <result, result_proof> to client
-        send((result, result_proof), request.client)
-        # forward result_proof ack to previous if any
-        send(result_proof, self.previous)
 
     def handle_new_request(self, request):
         # forward to head # previous?
@@ -95,13 +90,6 @@ class Replica:
 
         # cancel_timer on valid result          # TODO: error case
         timer.stop()
-        # send <result, result_proof> to client
-        # result, result_shuttle = get result shuttle and result from cache
-        # TODO: Handle this in receive handlers
-        send((result, result_proof), request.client)
-        # forward result_proof ack to previous if any
-        if self.previous:
-            send(result_shuttle, self.previous)
 
     def receive_request_shuttle(self, request):
         client = request.client
@@ -150,7 +138,13 @@ class Replica:
         # cache <client_id, operation, result>
         self.cache[(client, operation)] = result
         # forward result_shuttle to previous
-        pass
+
+        # send <result, result_proof> to client
+        # result, result_shuttle = get result shuttle and result from cache
+        # TODO: Handle this in receive handlers
+        send((result, result_proof), request.client)
+        # forward result_proof ack to previous if any
+        send(result_shuttle, self.previous)
 
     def receive_wedge_request(self, request):
         # Create a new wedge statement
