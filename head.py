@@ -15,27 +15,29 @@ class Type(Enum):
     TAIL = 3
 
 
-class Replica:
+class Head:
     def __init__(self, config, previous_r=None, next_r=None):
         self.running_state = config.init_object
-        self.mode = config.mode     # Mode
-        self.history = []   # ordered sequence
+        self.mode = config.mode  # Mode
+        self.history = []  # ordered sequence
         self.previous = previous_r
         self.next = next_r
         self.cache = {}
         self.timer = Timer(config.timeout)
+        self.type = Type.HEAD
 
-        if next_r is None:
-            self.type = Type.TAIL
-        else:
-            self.type = Type.INTERNAL
+        #add
+        self.configuration_id = self.configuration_id
+
+    def generate_slot(self):
+        # generates increasing id
+        pass
 
     def receive_handler(self, request):
         if self.mode == Mode.IMMUTABLE:
             # send <error>  # TODO: Sign?
             response = ErrorShuttle(request, 'Reconfiguration in progress')
-            signed_response = sign(response)
-            send(signed_response, to=request.client)
+            send(response, to=request.client)
             return
 
         # call receive_request or receive_request_shuttle or receive_result_shuttle based on request type
@@ -69,68 +71,46 @@ class Replica:
             # forward result_proof ack to previous if any
             send(result_proof, self.previous)
             return
+
+        # new raw request
         else:
-            # forward to head # previous?
-            send(request, to=self.previous)
+            self.running_state, result = self.running_state(operation)
+            # create <slot, operation>
+            slot = self.generate_slot()
+            order_statement = OrderStatement(request, slot, operation)
+            # create request shuttle
+            # add sign(order_statement) to order_proof
+            signed_order_statement = sign(order_statement)
+            order_proof = OrderProof(request, slot, operation, self.configuration_id, [signed_order_statement])
+            # add order_proof to history
+            self.history.append(order_proof)
+
+            # add sign(result_statement) to result_proof
+            result_statement = ResultStatement(request, slot, operation)
+            signed_result_statement = sign(result_statement)
+            result_proof = ResultProof(request, slot, operation, self.configuration_id, [signed_result_statement])
+
+            # forward Shuttle(<order_proof, result_proof>) if any
+            shuttle = Shuttle(request, order_proof, result_proof)
+            send(shuttle, to=self.next)
+            # cache <client_id, operation, _>
+            self.cache[(client, operation)] = None
+
             # init_timer
             timer = self.timer.new_timer()
             timer.start()
             # -- receive result shuttle ack
-            client, operation = request.client, request.operation
             # blocking_wait => valid result
             await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
             if timer.timed_out():
                 # TODO: Handle error case
                 return
-
-            # cancel_timer on valid result          # TODO: error case
+            # cancel_timer on valid result
             timer.stop()
-            # send <result, result_proof> to client
-            result, result_shuttle = get result shuttle and result from cache
-            send((result, result_proof), request.client)
-            # forward result_proof ack to previous if any
-            if self.previous:
-                send(result_shuttle, self.previous)
 
-
-    def receive_request_shuttle(self, request):
-        client = request.client
-        # verify client
-        operation = request.operation
-        # return result if <client_id, operation, result> in cache
-        # common
-        # verify order_proof
-        self.running_state, result = self.running_state(operation)
-        # add sign(order_statement) to order_proof
-        # add order_proof to history
-        self.cache[(client, operation)] = None
-        # add sign(result_statement) to result_proof
-        result_statement = ResultStatement(request, slot, operation)
-        signed_result_statement = sign(result_statement)
-        result_statements = request.order_proof.orderstatments + [signed_result_statement]
-        result_proof = ResultProof(request, slot, operation, self.configuration_id, result_statements)
-        # forward Shuttle(<order_proof, result_proof>)
-        shuttle = Shuttle(request, order_proof, result_proof)
-        send(shuttle, to=self.next)
-        # cache <client_id, operation, _>
-        self.cache[(client, operation)] = None
-        timer = self.timer.new_timer()
-        timer.start()
-        # -- receive result shuttle ack
-        # blocking_wait => valid result
-        await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
-        if timer.timed_out():
-            # TODO: Handle error case
-            return
-        # cancel_timer on valid result
-        timer.stop()
-
-    # TODO: consistency
     def receive_result_shuttle(self, result):
         # verify, Digital Signature verification
         client, operation = result.client, result.operation
         # cache <client_id, operation, result>
         self.cache[(client, operation)] = result
-        # forward result_shuttle to previous
-        pass
 

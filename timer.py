@@ -5,5 +5,8 @@ class Timer:
     def new_timer(self):
         pass
 
-    def cancel(self):
+    def start(self):
+        pass
+
+    def stop(self):
         pass
