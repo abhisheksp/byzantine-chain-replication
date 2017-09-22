@@ -41,5 +41,6 @@ class Client:
         receive(response)
         # verify result_proof
         result, result_proof = response
+        # TODO: verify t+1
         verify result_proof
 
