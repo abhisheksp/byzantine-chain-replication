@@ -16,6 +16,15 @@ class Client:
         self.head = self.configuration.get_head()
         self.tail = self.configuration.get_tail()
 
+    def consistent_results_count(self, result_statements):
+        count = 0
+        check_statement = result_statements[0]
+        for result_statement in result_statements:
+            if check_statement.slot == result_statements.slot and check_statement.operation == result_statements.operation:
+                count++
+        return count
+
+
     # Send Request
     def send_handler(self, operation):
         # send request to head
@@ -39,8 +48,13 @@ class Client:
     # Receive
     def receive_handler(self, response):
         receive(response)
-        # verify result_proof
         result, result_proof = response
-        # TODO: verify t+1
-        verify result_proof
+        # verify result_proof
+        #verify t+1
+        for  result_statements in result_proof:
+        if(consistent_results_count(result_statements) < (config.replica_count)/2 + 1):
+            self.configuration.broadcast_request((self, operation))
+        else:
+            # First Result is considered
+            return result_statements[0]
 

@@ -21,7 +21,7 @@ class Olympus:
         self.configuration = Configuration(config)
     def selectQuorum(self, quorum_count):
         #return wedge statements of quorum_count number of replicas, randomly
-
+        pass
 
     def receive_wedge_statement_handler(self, response):
         await(wedge_statements in received)
@@ -36,23 +36,23 @@ class Olympus:
     def find_quorum(self, wedge_statements):        
         replicas = self.configuration.replicas
         def find_quorum_util():
-            current_quorum = select t+1 random wedge_statements
+            quorum_count  = (self.replica_count/2) + 1
+            current_quorum = selectQuorum(quorum_count)
             longest_history_wedge_statement = max(current_quorum, key=history)
-            check if longest_history_wedge_statement is consistent with other wedge statements
-            if consistent:
-              initial_running_state = hash(longest_history_wedge_statement.running_state)
+            other_wedge_statements= wedge_statements - longest_history_wedge_statement
+            for wedge_statement in other_wedge_statements:
+                if not is_consistent(wedge_statement.history, longest_history_wedge_statement.history):
+                    return None
+            initial_running_state = hash(longest_history_wedge_statement.running_state)
             differences_in_history = [diff_in_history(longest_history_wedge_statement, w) for w in wedge_statements if w != longest_history_wedge_statement)]
             for diff_in_history, replica in differences_in_history:
                   send(CatchupReq, to=replica)
-            timer_start
+            timer_start()
             await(timer_expires or Caughtup(_) in Received)
-            if timer expires return False
-            else: compare hash(running_state) with initial_running_state for replica
-            if all(compare hash(running_state) with initial_running_state for replica):
-                return True     # return quorum
-            select new quorum
-            return False
-            pass
+            if timer expires return None
+            elif not all(initial_running_state == running_state for replica.running_state in CaughtUpReplicas):
+                return None
+            return quorum = (initial_running_state)
         found_quorum = find_quorum_util()
         while not found_quorum:
             found_quorum = find_quorum_util()
