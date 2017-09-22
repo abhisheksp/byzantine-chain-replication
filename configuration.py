@@ -15,3 +15,7 @@ class Configuration:
 
     def get_tail(self):
         return self.tail   # TODO: verification?
+
+    def broadcast_request(self, request):
+        client, operation = request
+        map(lambda x: x.send(client, operation), self.replicas)

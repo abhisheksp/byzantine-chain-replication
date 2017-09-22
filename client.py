@@ -1,3 +1,6 @@
+from timer import Timer
+
+
 class Client:
     # Initialize client with configuration
     def __init__(self, config):
@@ -5,19 +8,28 @@ class Client:
         # service details: {head}, {replicas}
         # timeout value
         # takes timer?
-        # self.timeout = config.timeout
+        self.timer = Timer(config.timeout)
         self.olympus = config.olympus
-        self.head = self.olympus.configuration.get_head()
-        self.tail = self.olympus.configuration.get_tail()
+        self.configuration = config.olympus.get_configuration()
+        self.head = self.configuration.get_head()
+        self.tail = self.configuration.get_tail()
         pass
 
     # Send Request
     def send(self, operation):
-        # service details obtained from initial config
         # send <o> to service.head
         # init_timer      # TODO: request identifier
+        timer = self.timer.new_timer()
+        timer.init_timer()
         # receive yield point
-        # blocking_wait => valid result # TODO: | error | timeout
+        # timeout yield point
+        # -- blocking_wait #await until time out or received
+        valid_result = None
+        if valid_result:    # TODO: | error
+            timer.cancel()
+        else:
+            # timeout
+            self.configuration.broadcast_request((self, operation))
         pass
 
     # Receive
@@ -26,8 +38,3 @@ class Client:
         # verify result_proof
         pass
 
-    def timer(self):
-        # start_timer                   # TODO: model timer
-        # timed_out? raise error
-        # cancel_request? cancel_timer
-        pass
