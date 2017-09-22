@@ -29,6 +29,9 @@ class Head:
         #add
         self.configuration_id = self.configuration_id
 
+        #add checkpointing
+        checkpoint()
+
     def generate_slot(self):
         # generates increasing id
         pass
@@ -134,3 +137,17 @@ class Head:
         #send running state message to Olympus
         send(self.running_state,to=olympus)
 
+#TODO: Checkpoint timer not declared in class variables
+    def checkpoint(self):
+        while true:
+            checkpoint_shuttle = {}
+            checkpoint_slot = 100
+            checkpoint_shuttle[self.id] = (hash(self.running_state), checkpoint_slot)
+            send(checkpoint_shuttle, to=self.next)
+            sleep(checkpoint_timer)
+    
+    def receive_checkpoint_result(self, result):
+        result_checkpoint = result[self.id]
+        if result_checkpoint[checkpoint_slot] >= len(self.history):
+            self.history = self.history[-checkpoint_slot:]
+            del result[self.id]

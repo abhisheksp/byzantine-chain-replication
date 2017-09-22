@@ -145,8 +145,18 @@ class Replica:
         # set the replica state to Immutable
         self.mode = 'IMMUTABLE'
 
+#TODO: Checkpoint timer not declared in class variables
     def receive_catchup_messges(self, request):
         # wait until all order proofs are in replica's history
         await(all(order_proof in self.history for order_proof in request))
         # send running state message to Olympus
         send(self.running_state, to=olympus)
+
+
+    def receive_checkpoint_request(self, request):
+        request[self.id] = (hash(self.running_state), checkpoint_slot)
+        result_checkpoint = request[self.id]
+        if result_checkpoint[checkpoint_slot] >= len(self.history):
+            self.history = self.history[-checkpoint_slot:]
+            del request[self.id]
+        send(request, to=self.previous)
