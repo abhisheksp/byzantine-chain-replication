@@ -16,6 +16,9 @@ Shuttle = namedtuple('Shuttle', ['request', 'order_proof', 'result_proof'])
 ResultShuttle = namedtuple('ResultShuttle', ['request', 'result_proof'])
 ErrorShuttle = namedtuple('ErrorShuttle', ['request', 'error'])
 OrderStatement = namedtuple('OrderStatement', ['request', 'slot', 'operation'])
+WedgeStatement = namedtuple('WedgeStatement', [])
+WedgeRequest = namedtuple('OrderRequest', [])
+CatchUpRequest = namedtuple('CatchupRequest', [])
 ResultStatement = namedtuple('ResultStatement', ['request', 'slot', 'operation'])
 
 OrderProof = namedtuple('OrderProof', [
