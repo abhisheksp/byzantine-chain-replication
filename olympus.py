@@ -12,20 +12,28 @@ class Olympus:
         self.configuration.broadcast_request(wedge_request)
         -- wedge statement yield point
         # find Quorum
-        self.find_quorum(wedge_statements)
+        quorum = self.find_quorum(wedge_statements)
         # found quorum
         # get initial_running_state from quorum
-        config.initial_running_state = initial_running_state
+        config.initial_running_state = quorum.initial_running_state
         config.mode = mode.ACTIVE
         # same number of replicas
         self.configuration = Configuration(config)
+    def selectQuorum(self, quorum_count):
+        #return wedge statements of quorum_count number of replicas, randomly
+
 
     def receive_wedge_statement_handler(self, response):
-        # initialize wedge_statements if empty
-        # collect all wedge_statements
-        pass
+        await(wedge_statements in received)
+        
 
-    def find_quorum(self, wedge_statements):
+    def is_consistent(self, history1, history2):
+        for order_proof1, order_proof2 in zip(history1, history2):
+            if order_proof1.slot == order_proof2.slot and order_proof1.operation != order_proof2.operation:
+                return False;
+        return True;
+
+    def find_quorum(self, wedge_statements):        
         replicas = self.configuration.replicas
         def find_quorum_util():
             current_quorum = select t+1 random wedge_statements

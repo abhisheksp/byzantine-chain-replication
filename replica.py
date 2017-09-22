@@ -33,9 +33,9 @@ class Replica:
         operations_consistent = all(order_statements[0]['operation'] == order_statement['operation'] for order_statement in order_statements)
         
         if slots_consistent and operations_consistent:
-            return true
+            return True
         else:
-            return false
+            return False
 
     def verify_order_proof(self, RequestShuttle):
         order_proof = RequestShuttle['order_proof']

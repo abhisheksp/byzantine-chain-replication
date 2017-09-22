@@ -128,7 +128,7 @@ class Head:
 
 # TODO: Checkpoint timer not declared in class variables
     def checkpoint(self):
-        while true:
+        while True:
             checkpoint_shuttle = {}
             checkpoint_slot = 100
             checkpoint_shuttle[self.id] = (hash(self.running_state), checkpoint_slot)
