@@ -161,3 +161,15 @@ class Replica:
         await(all(order_proof in self.history for order_proof in request))
         #send running state message to Olympus
         send(self.running_state,to=olympus)
+
+    def receive_checkpoint_request(self, request):
+        request[self.id] = (hash(self.running_state), checkpoint_slot)
+        send(request, to=self.next)
+
+
+    def receive_checkpoint_result(self, result):
+        result_checkpoint = result[self.id]
+        if result_checkpoint[checkpoint_slot] >= len(self.history):
+            self.history = self.history[-checkpoint_slot:]
+            del result[self.id]
+        send(result, to=self.previous)
