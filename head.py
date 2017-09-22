@@ -17,7 +17,6 @@ class Head:
         self.olympus = config.olympus
         self.configuration_id = self.configuration_id
 
-        #add checkpointing
         # TODO: async?
         checkpoint()
 
@@ -37,69 +36,74 @@ class Head:
 
     # raw request
     def receive_request(self, request):
-        client = request.client
+        client, operation = request.client, request.operation
         # verify client         # TODO: error case
         # if invalid client, drop request
-        operation = request.operation
-
         # return cached result if any
         if (client, operation) in self.cache and self.cache is not None:
             # send result to client
-            result = self.cache[(client, operation)]
-            send((result, result_proof), request.client)
+            self.send_cached_result(client, operation)
         # recognizes the operation
         elif (client, operation) in self.cache:
-            timer = self.timer.new_timer()
-            timer.start()
-            # -- receive result shuttle ack        # TODO: extract send response to client method
-            client, operation = request.client, request.operation
-            await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
-            if timer.timed_out():
-                reconfigure_request = ReconfigureRequest()
-                send(reconfigure_request, to=self.olympus)
-                return
-            # cancel_timer on valid result
-            timer.stop()
-            # send <result, result_proof> to client
-            send((result, result_proof), request.client)
-
+            self.handle_recognized_operation(client, operation)
         # new raw request
         else:
-            self.running_state, result = self.running_state(operation)
-            # create <slot, operation>
-            slot = self.generate_slot()
-            order_statement = OrderStatement(request, slot, operation)
-            # create request shuttle
-            # add sign(order_statement) to order_proof
-            signed_order_statement = sign(order_statement)
-            order_proof = OrderProof(request, slot, operation, self.configuration_id, [signed_order_statement])
-            # add order_proof to history
-            self.history.append(order_proof)
+            self.handle_new_request(request)
 
-            # add sign(result_statement) to result_proof
-            result_statement = ResultStatement(request, slot, operation)
-            signed_result_statement = sign(result_statement)
-            result_proof = ResultProof(request, slot, operation, self.configuration_id, [signed_result_statement])
+    def send_cached_result(self, client, operation):
+        result = self.cache[(client, operation)]
+        send((result, result_proof), request.client)
 
-            # forward Shuttle(<order_proof, result_proof>) if any
-            shuttle = Shuttle(request, order_proof, result_proof)
-            send(shuttle, to=self.next)
-            # cache <client_id, operation, _>
-            self.cache[(client, operation)] = None
+    def handle_recognized_operation(self, client, operation):
+        timer = self.timer.new_timer()
+        timer.start()
+        # -- receive result shuttle ack        # TODO: extract send response to client method
+        # client, operation = request.client, request.operation
+        await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
+        if timer.timed_out():
+            send(ReconfigureRequest(), to=self.olympus)
+            return
+        # cancel_timer on valid result
+        timer.stop()
+        # send <result, result_proof> to client
+        send((result, result_proof), request.client)
 
-            # init_timer
-            timer = self.timer.new_timer()
-            timer.start()
-            # -- receive result shuttle ack
-            # blocking_wait => valid result
-            await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
-            if timer.timed_out():
-                # TODO: Handle error case
-                reconfigure_request = ReconfigureRequest()
-                send(reconfigure_request, to=self.olympus)
-                return
-            # cancel_timer on valid result
-            timer.stop()
+    def handle_new_request(self, request):
+        client, operation = request
+        self.running_state, result = self.running_state(operation)
+        # create <slot, operation>
+        slot = self.generate_slot()
+        order_statement = OrderStatement(request, slot, operation)
+        # create request shuttle
+        # add sign(order_statement) to order_proof
+        signed_order_statement = sign(order_statement)
+        order_proof = OrderProof(request, slot, operation, self.configuration_id, [signed_order_statement])
+        # add order_proof to history
+        self.history.append(order_proof)
+
+        # add sign(result_statement) to result_proof
+        result_statement = ResultStatement(request, slot, operation)
+        signed_result_statement = sign(result_statement)
+        result_proof = ResultProof(request, slot, operation, self.configuration_id, [signed_result_statement])
+
+        # forward Shuttle(<order_proof, result_proof>) if any
+        shuttle = Shuttle(request, order_proof, result_proof)
+        send(shuttle, to=self.next)
+        # cache <client_id, operation, _>
+        self.cache[(client, operation)] = None
+
+        # init_timer
+        timer = self.timer.new_timer()
+        timer.start()
+        # -- receive result shuttle ack
+        # blocking_wait => valid result
+        await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
+        if timer.timed_out():
+            reconfigure_request = ReconfigureRequest()
+            send(reconfigure_request, to=self.olympus)
+            return
+        # cancel_timer on valid result
+        timer.stop()
 
     def receive_result_shuttle(self, result):
         # verify, Digital Signature verification

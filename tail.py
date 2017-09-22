@@ -3,7 +3,7 @@ from message import *
 from timer import Timer
 
 
-class Replica:
+class Tail:
     def __init__(self, config, previous_r=None, next_r=None):
         self.id = uuid.uuid4()
         self.running_state = config.init_object
@@ -47,58 +47,66 @@ class Replica:
 
     # raw request
     def receive_request(self, request):
-        client = request.client
+        client, operation = request
         # verify client         # TODO: error case
-        operation = request.operation
-
+        # drop request if verify failed
         # return cached result if any
         if (client, operation) in self.cache and self.cache is not None:
             # send result to client
-            result = self.cache[(client, operation)]
-            send((result, result_proof), request.client)
+            self.send_cached_result(client, operation)
         # recognizes the operation
         elif (client, operation) in self.cache:
-            timer = self.timer.new_timer()
-            timer.start()
-            # -- receive result shuttle ack        # TODO: extract send response to client method
-            client, operation = request.client, request.operation
-            await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
-            if timer.timed_out():
-                # TODO: Handle error case
-                reconfigure_request = ReconfigureRequest()
-                send(reconfigure_request, to=self.olympus)
-                return
-            # cancel_timer on valid result
-            timer.stop()
-            # send <result, result_proof> to client
-            send((result, result_proof), request.client)
-            # forward result_proof ack to previous if any
-            send(result_proof, self.previous)
-            return
+            self.handle_recognized_operation(client, operation)
         else:
-            # forward to head # previous?
-            send(request, to=self.previous)
-            # init_timer
-            timer = self.timer.new_timer()
-            timer.start()
-            # -- receive result shuttle ack
-            client, operation = request.client, request.operation
-            # blocking_wait => valid result
-            await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
-            if timer.timed_out():
-                reconfigure_request = ReconfigureRequest()
-                send(reconfigure_request, to=self.olympus)
-                # TODO: Handle error case
-                return
+            self.handle_new_request(request)
 
-            # cancel_timer on valid result          # TODO: error case
-            timer.stop()
-            # send <result, result_proof> to client
-            # result, result_shuttle = get result shuttle and result from cache
-            send((result, result_proof), request.client)
-            # forward result_proof ack to previous if any
-            if self.previous:
-                send(result_shuttle, self.previous)
+    def handle_new_request(self, request):
+        # forward to head # previous?
+        send(request, to=self.previous)
+        # init_timer
+        timer = self.timer.new_timer()
+        timer.start()
+        # -- receive result shuttle ack
+        client, operation = request.client, request.operation
+        # blocking_wait => valid result
+        await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
+        if timer.timed_out():
+            reconfigure_request = ReconfigureRequest()
+            send(reconfigure_request, to=self.olympus)
+            # TODO: Handle error case
+            return
+
+        # cancel_timer on valid result          # TODO: error case
+        timer.stop()
+        # TODO: Handle in response handler
+        # send <result, result_proof> to client
+        # result, result_shuttle = get result shuttle and result from cache
+        send((result, result_proof), request.client)
+        # forward result_proof ack to previous if any
+        if self.previous:
+            send(result_shuttle, self.previous)
+
+    def send_cached_result(self, client, operation):
+        result = self.cache[(client, operation)]
+        send((result, result_proof), request.client)
+
+    def handle_recognized_operation(self, client, operation):
+        timer = self.timer.new_timer()
+        timer.start()
+        # -- receive result shuttle ack        # TODO: extract send response to client method
+        client, operation = request.client, request.operation
+        await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
+        if timer.timed_out():
+            # TODO: Handle error case
+            reconfigure_request = ReconfigureRequest()
+            send(reconfigure_request, to=self.olympus)
+            return
+        # cancel_timer on valid result
+        timer.stop()
+        # send <result, result_proof> to client
+        send((result, result_proof), request.client)
+        # forward result_proof ack to previous if any
+        send(result_proof, self.previous)
 
     def receive_request_shuttle(self, request):
         client = request.client
@@ -149,7 +157,7 @@ class Replica:
         self.mode = 'IMMUTABLE'
 
 #TODO: Checkpoint timer not declared in class variables
-    def receive_catchup_messges(self, request):
+    def receive_catchup_messages(self, request):
         # wait until all order proofs are in replica's history
         await(all(order_proof in self.history for order_proof in request))
         # send running state message to Olympus
