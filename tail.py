@@ -22,10 +22,7 @@ class Tail:
         slots_consistent = all(order_statements[0]['slot'] == order_statement['slot'] for order_statement in order_statements)
         operations_consistent = all(order_statements[0]['operation'] == order_statement['operation'] for order_statement in order_statements)
         
-        if slots_consistent and operations_consistent:
-            return true
-        else:
-            return False
+        return slots_consistent and operations_consistent
 
     def verify_order_proof(self, RequestShuttle):
         order_proof = RequestShuttle['order_proof']
