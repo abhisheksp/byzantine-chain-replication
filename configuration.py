@@ -1,21 +1,24 @@
 from replica import Replica
+from head import Head
+from tail import Tail
 
 
 class Configuration:
     def __init__(self, config):
-        self.replica_count = config.replica_count   # minimum 3
-        # TODO: init_replica with chains
-        self.replicas = [Replica(config.init_object) * self.replica_count]
-        self.head = self.replicas[0]
-        self.tail = self.replicas[-1]
+        self.replica_count = config.replica_count
+        self.head = Head(config.init_object)
+        self.tail = Tail(config.init_object)
+        # create inner_replicas with chains
+        inner_replicas = [Replica(config.init_object) * self.replica_count]
+        self.replicas = [head] + inner_replicas + [tail]
         pass
 
     def get_head(self):
-        return self.head   # TODO: verification?
+        return self.head
 
     def get_tail(self):
-        return self.tail   # TODO: verification?
+        return self.tail
 
     def broadcast_request(self, request):
         client, operation = request
-        map(lambda x: x.send(client, operation), self.replicas)
+        map(lambda replica: send((client, operation), to=replica), self.replicas)
