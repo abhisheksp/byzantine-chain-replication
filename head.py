@@ -47,6 +47,7 @@ class Head:
     def receive_request(self, request):
         client = request.client
         # verify client         # TODO: error case
+        # if invalid client, drop request
         operation = request.operation
 
         # return cached result if any
@@ -62,7 +63,8 @@ class Head:
             client, operation = request.client, request.operation
             await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
             if timer.timed_out():
-                # TODO: Handle error case
+                reconfigure_request = ReconfigureRequest()
+                send(reconfigure_request, to=self.olympus)
                 return
             # cancel_timer on valid result
             timer.stop()
@@ -104,6 +106,8 @@ class Head:
             await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
             if timer.timed_out():
                 # TODO: Handle error case
+                reconfigure_request = ReconfigureRequest()
+                send(reconfigure_request, to=self.olympus)
                 return
             # cancel_timer on valid result
             timer.stop()
@@ -113,4 +117,20 @@ class Head:
         client, operation = result.client, result.operation
         # cache <client_id, operation, result>
         self.cache[(client, operation)] = result
+
+#TODO: Add self.id and self.olympus
+    def receive_wedge_request(self, request):
+        # Create a new wedge statement
+        wedgeStatement = ('wedged', self.id, self.running_state, self.history)
+        #Send the statement to Olympus
+        send(wedgeStatement,to=self.olympus)
+        #set the replica state to Immutable
+        self.mode = 'IMMUTABLE'
+
+
+    def receive_catchup_messges(self, request):
+        #wait until all order proofs are in replica's history
+        await(all(order_proof in self.history for order_proof in request))
+        #send running state message to Olympus
+        send(self.running_state,to=olympus)
 
