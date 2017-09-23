@@ -40,6 +40,10 @@ class Head:
         if not valid_client(): 
             #drop request
             return
+
+        # If head is IMMUTABLE
+        handle_non_active_mode()
+
         # return cached result if any
         if (client, operation) in self.cache and self.cache is not None:
             # send result to client
