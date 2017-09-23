@@ -45,7 +45,7 @@ class Replica:
         if not valid_client():
             return
         
-        # If head is IMMUTABLE
+        # If replica is IMMUTABLE
         handle_non_active_mode()
         
         # Replica has the result in its cache
@@ -93,7 +93,7 @@ class Replica:
         -- receive result shuttle ack
         client, operation = request.client, request.operation
         
-        # Wait untill result shuttles comes back from tail or timer expires
+        # Wait until result shuttles comes back from tail or timer expires
         # Send 'reconfigure-request' to olympus if timer expires
         await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
         if timer.timed_out():
