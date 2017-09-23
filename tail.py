@@ -18,26 +18,6 @@ class Tail:
         self.type = Type.TAIL
         self.type = Type.INTERNAL
 
-    def is_consistent(self, order_statements):
-        slots_consistent = all(order_statements[0]['slot'] == order_statement['slot'] for order_statement in order_statements)
-        operations_consistent = all(order_statements[0]['operation'] == order_statement['operation'] for order_statement in order_statements)
-        
-        return slots_consistent and operations_consistent
-
-    def verify_order_proof(self, RequestShuttle):
-        order_proof = RequestShuttle['order_proof']
-        return is_consistent(order_proof['order_statements'])
-    
-    def handle_non_active_mode(self):
-        if self.mode == Mode.IMMUTABLE:
-            # replica is immutable, send error back to client  
-            response = ErrorShuttle(request, 'Error')
-            send(sign(response), to=request.client)
-
-    def valid_client(self, request):
-        # Check client signature
-        # Returns True if client is verified, returns false otherwise 
-
     # raw request
     def receive_request(self, request):
         client, operation = request
@@ -128,8 +108,6 @@ class Tail:
         # forward result_shuttle ack to previous
         send(ResultShuttle(), to=self.previous)
 
-
-
     def receive_wedge_request(self, request):
         # Create a new wedge statement
         wedgeStatement = ('wedged', self.id, self.running_state, self.history)
@@ -138,13 +116,11 @@ class Tail:
         # set the replica state to Immutable
         self.mode = Mode.IMMUTABLE
 
-
     def receive_catchup_messages(self, request):
         # wait until all order proofs are in replica's history
         await(all(order_proof in self.history for order_proof in request))
         # send running state message to Olympus
         send(self.running_state, to=olympus)
-
 
     def receive_checkpoint_request(self, checkpoint_shuttle):
         # Replica hashes its running state and adds it to checkpoint shuttle
@@ -157,3 +133,26 @@ class Tail:
             self.history = self.history[-checkpoint_slot:]
             del checkpoint_shuttle[self.id]
         send(checkpoint_shuttle, to=self.previous)
+
+    def is_consistent(self, order_statements):
+        slots_consistent = all(order_statements[0]['slot'] == order_statement['slot']
+                               for order_statement in order_statements)
+        operations_consistent = all(order_statements[0]['operation'] == order_statement['operation']
+                                    for order_statement in order_statements)
+
+        return slots_consistent and operations_consistent
+
+    def verify_order_proof(self, RequestShuttle):
+        order_proof = RequestShuttle['order_proof']
+        return is_consistent(order_proof['order_statements'])
+
+    def handle_non_active_mode(self):
+        if self.mode == Mode.IMMUTABLE:
+            # replica is immutable, send error back to client
+            response = ErrorShuttle(request, 'Error')
+            send(sign(response), to=request.client)
+
+    def valid_client(self, request):
+        # Check client signature
+        # Returns True if client is verified, returns false otherwise
+        pass
