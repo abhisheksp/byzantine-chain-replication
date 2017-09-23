@@ -80,3 +80,11 @@ class Olympus:
         return found_quorum
 
 
+    def receive_heartbeat_handler(self, request):
+        client, operation = request
+        verify client
+        current_client_configuration = operation.configuration
+        # send new configuration to client if the current configuration is invalid
+        if current_client_configuration != self.configuration:
+            send((Reconfigure, self.configuration), to=client)
+
