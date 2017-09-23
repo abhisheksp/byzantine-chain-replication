@@ -44,35 +44,42 @@ class Replica:
         # drop request if verify failed
         if not valid_client():
             return
-            
-        # return cached result if any
+        
+        # If head is IMMUTABLE
+        handle_non_active_mode()
+        
+        # Replica has the result in its cache
         if (client, operation) in self.cache and self.cache is not None:
-            # send result to client
             self.send_cached_result(client, operation)
-        # recognizes the operation
+
+        # Replica recognizes the operation from this client (client ID was cached before)
         elif (client, operation) in self.cache:
             self.handle_recognized_operation(client, operation)
+        
+        # Replica does not recognize this operation
         else:
             self.handle_new_request(request)
 
     def send_cached_result(self, client, operation):
+        # Get result stored in cache and send it to the client
         result = self.cache[(client, operation)]
         send((result, result_proof), request.client)
 
     def handle_recognized_operation(self, client, operation):
         timer = self.timer.new_timer()
         timer.start()
-        # -- receive result shuttle ack        # TODO: extract send response to client method
+        -- receive result shuttle ack  
+
+        # Wait till result shuttle comes back from tail or timer expires        
         await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
         if timer.timed_out():
             reconfigure_request = ReconfigureRequest()
             send(reconfigure_request, to=self.olympus)
             return
-        # cancel_timer on valid result
         timer.stop()
 
     def handle_new_request(self, request):
-        # forward to head # previous?
+        # request is a tuple of client and operation
         send(request, to=self.previous)
         # init_timer
         timer = self.timer.new_timer()
