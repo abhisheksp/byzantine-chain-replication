@@ -7,7 +7,7 @@ class Replica:
     def __init__(self, config, previous_r=None, next_r=None):
         self.id = uuid.uuid4()
         self.running_state = config.init_object
-        self.mode = config.mode     # Mode
+        self.mode = Mode.ACTIVE
         self.history = []   # ordered sequence
         self.previous = previous_r
         self.next = next_r
