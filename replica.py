@@ -24,8 +24,10 @@ class Replica:
             send(sign(response), to=request.client)
 
     def is_consistent(self, order_statements):
-        slots_consistent = all(order_statements[0]['slot'] == order_statement['slot'] for order_statement in order_statements)
-        operations_consistent = all(order_statements[0]['operation'] == order_statement['operation'] for order_statement in order_statements)
+        slots_consistent = all(order_statements[0]['slot'] == order_statement['slot']
+                               for order_statement in order_statements)
+        operations_consistent = all(order_statements[0]['operation'] == order_statement['operation']
+                                    for order_statement in order_statements)
         
         return slots_consistent and operations_consistent
 
@@ -38,6 +40,7 @@ class Replica:
         # Returns True if client is verified, returns false otherwise 
 
     # raw request
+
     def receive_request(self, request):
         client, operation = request
         # verify client
@@ -122,7 +125,8 @@ class Replica:
         # Create order_proof
         order_statement = OrderStatement(request, slot, operation)
         signed_order_statement = sign(order_statement)
-        order_proof = OrderProof(request, slot, operation, self.configuration_id, [signed_order_statement])
+        order_statements = request_shuttle.order_proof.orderstatments + [signed_order_statement]
+        order_proof = OrderProof(request, slot, operation, self.configuration_id, order_statements)
         
         # add order_proof to history
         self.history.append(order_proof)
@@ -155,7 +159,6 @@ class Replica:
             return
         timer.stop()
 
-
     def receive_result_shuttle(self, result_shuttle):
         # Perform Signature verification
         client, operation = result_shuttle.client, result_shuttle.operation
@@ -180,8 +183,7 @@ class Replica:
         #set the replica state to Immutable
         self.mode = Mode.IMMUTABLE
 
-
-    def receive_catchup_messges(self, request):
+    def receive_catchup_messages(self, request):
         #wait until all order proofs are in replica's history
         await(all(order_proof in self.history for order_proof in request))
         #send running state message to Olympus
@@ -192,7 +194,6 @@ class Replica:
         # Send shuttle to the next replica
         checkpoint_shuttle[self.id] = (hash(self.running_state), checkpoint_slot)
         send(checkpoint_shuttle, to=self.next)
-
 
     def receive_checkpoint_result(self, result_checkpoint_shuttle):
         result_checkpoint = result_checkpoint_shuttle[self.id]
