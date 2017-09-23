@@ -17,16 +17,11 @@ class Replica:
         self.configuration_id = self.configuration_id
         self.type = Type.INTERNAL
 
-    def receive_handler(self, request):
+    def handle_non_active_mode(self):
         if self.mode == Mode.IMMUTABLE:
-            # send <error>  # TODO: Sign?
-            response = ErrorShuttle(request, 'Reconfiguration in progress')
-            signed_response = sign(response)
-            send(signed_response, to=request.client)
-            return
-
-        # call receive_request or receive_request_shuttle or receive_result_shuttle based on request type
-        pass
+            # replica is immutable, send error back to client  
+            response = ErrorShuttle(request, 'Error')
+            send(sign(response), to=request.client)
 
     def is_consistent(self, order_statements):
         slots_consistent = all(order_statements[0]['slot'] == order_statement['slot'] for order_statement in order_statements)
@@ -38,11 +33,18 @@ class Replica:
         order_proof = RequestShuttle['order_proof']
         return is_consistent(order_proof['order_statements'])
 
+    def valid_client(self, request):
+        # Check client signature
+        # Returns True if client is verified, returns false otherwise 
+
     # raw request
     def receive_request(self, request):
         client, operation = request
-        # verify client         # TODO: error case
+        # verify client
         # drop request if verify failed
+        if not valid_client():
+            return
+            
         # return cached result if any
         if (client, operation) in self.cache and self.cache is not None:
             # send result to client
