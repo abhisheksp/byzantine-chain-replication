@@ -20,24 +20,10 @@ class Head:
         # Head initiates checkpointing
         checkpoint()
 
-    def generate_slot(self):
-        self.current_slot_id += 1
-        return self.current_slot_id
-
-    def handle_non_active_mode(self):
-        if self.mode == Mode.IMMUTABLE:
-            # replica is immutable, send error back to client  
-            response = ErrorShuttle(request, 'Error')
-            send(sign(response), to=request.client)
-
-    def valid_client(self, request):
-        # Check client signature
-        # Returns True if client is verified, returns false otherwise 
-
     # raw request
     def receive_request(self, request):
         client, operation = request.client, request.operation
-        if not valid_client(): 
+        if not self.valid_client(client):
             #drop request
             return
 
@@ -106,7 +92,7 @@ class Head:
         
         -- receive result shuttle ack
         
-        # Wait untill result shuttle comes back from the tail or timer expires
+        # Wait until result shuttle comes back from the tail or timer expires
         # Send 'reconfigure-request' to olympus if timer expires
         await(timer.timed_out() or ResultShuttle((client, operation), _) in received)
         if timer.timed_out():
@@ -141,7 +127,6 @@ class Head:
         # Send running state message to Olympus
         send(self.running_state,to=olympus)
 
-
     def checkpoint(self):
         # Assumed chekpoint slot = 100
         while True:
@@ -159,3 +144,18 @@ class Head:
         if result_checkpoint[checkpoint_slot] >= len(self.history):
             self.history = self.history[-checkpoint_slot:]
             del result[self.id]
+
+    def generate_slot(self):
+        self.current_slot_id += 1
+        return self.current_slot_id
+
+    def handle_non_active_mode(self):
+        if self.mode == Mode.IMMUTABLE:
+            # replica is immutable, send error back to client
+            response = ErrorShuttle(request, 'Error')
+            send(sign(response), to=request.client)
+
+    def valid_client(self, client):
+        # Check client signature
+        # Returns True if client is verified, returns false otherwise
+        pass
