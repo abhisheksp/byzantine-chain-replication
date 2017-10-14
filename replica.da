@@ -1,0 +1,8 @@
+class Replica(process):
+    def setup(): pass
+
+    def run():
+        await(False)
+
+    def receive(msg=('request',)):
+        output("request handler executed")

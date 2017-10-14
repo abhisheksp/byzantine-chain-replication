@@ -1,9 +1,9 @@
-pi = import_da('ping')
-po = import_da('pong')
+replica = import_da('replica')
+client = import_da('client')
 
 
 def main():
-    pong = new(po.Pong, args=(), at='PongNode')
-    ping = new(pi.Ping, args=(pong,))
-    start(pong)
-    start(ping)
+    replica_process = new(replica.Replica, args=())
+    client_process = new(client.Client, args=(replica_process,))
+    start(replica_process)
+    start(client_process)

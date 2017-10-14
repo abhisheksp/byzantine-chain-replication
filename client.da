@@ -1,0 +1,6 @@
+class Client(process):
+    def setup(replica): pass
+
+    def run():
+        send(('request',), to=replica)
+        output("send request")

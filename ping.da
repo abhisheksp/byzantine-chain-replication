@@ -1,7 +1,0 @@
-class Ping(process):
-    def setup(pong): pass
-
-    def run():
-        send(('Ping',), to=pong)
-        await(received(('Pong',)))
-        output("Ponged.")
