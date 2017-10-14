@@ -1,9 +1,8 @@
-replica = import_da('replica')
 client = import_da('client')
-
+olympus = import_da('olympus')
 
 def main():
-    replica_process = new(replica.Replica, args=())
-    client_process = new(client.Client, args=(replica_process,))
-    start(replica_process)
+    client_process = new(client.Client, args=())
+    olympus_process = new(olympus.Olympus, args=(client_process,))
     start(client_process)
+    start(olympus_process)

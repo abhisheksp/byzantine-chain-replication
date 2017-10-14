@@ -1,0 +1,12 @@
+replica = import_da('replica')
+
+
+class Olympus(process):
+    def setup(client): pass
+
+    def run():
+        replica_process = new(replica.Replica, args=())
+        start(replica_process)
+        send(('new_configuration', replica_process,), to=client)
+        output("bringing up a replica")
+        await(False)

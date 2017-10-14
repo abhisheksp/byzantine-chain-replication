@@ -1,6 +1,15 @@
 class Client(process):
-    def setup(replica): pass
+    def setup():
+        self.head = None
 
     def run():
-        send(('request',), to=replica)
-        output("send request")
+        output('Client is up...')
+        output('awaiting new configuration from Olympus')
+        await(some(received(('new_configuration', _,))))
+        output('Sending Demo Payload: [1, 2, 3] from Client')
+        demo_payload = [1, 2, 3]
+        send(('request', demo_payload,), to=self.head)
+
+    def receive(msg=('new_configuration', obj,)):
+        output('received new configuration from Olympus')
+        self.head = obj

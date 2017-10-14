@@ -4,5 +4,5 @@ class Replica(process):
     def run():
         await(False)
 
-    def receive(msg=('request',)):
-        output("request handler executed")
+    def receive(msg=('request', payload,)):
+        output("Received Client Request, Payload:", payload)
