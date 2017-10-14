@@ -1,0 +1,9 @@
+pi = import_da('ping')
+po = import_da('pong')
+
+
+def main():
+    pong = new(po.Pong, args=(), at='PongNode')
+    ping = new(pi.Ping, args=(pong,))
+    start(pong)
+    start(ping)
