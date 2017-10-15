@@ -1,25 +1,37 @@
 class Replica(process):
-    def setup(config, ):
+    def setup(client_processes, config, ):
         self.running_state = config['initial_running_state']
-        replica_id = config['replica_id']
-        self.signing_key = config['replica_sks'][replica_id]
-        self.verifying_key = config['replica_vks'][replica_id]
+        self.replica_id = config['replica_id']
+        self.signing_key = config['replica_sks'][self.replica_id]
+        self.verifying_key = config['replica_vks'][self.replica_id]
         self.client_pks = config['client_vks']
 
     def run():
         await(False)
 
     def receive(msg=('request', payload,)):
-        is_verified, payload = verify_client(payload)
+        is_verified, payload_with_client = verify_client(payload)
         if is_verified:
-            output("Received Client Request, Payload:", payload)
+            output("Received Client Request, Payload:", payload_with_client['payload'])
+            response_message = b'OK'
+            response = new_request('response', response_message)
+            client_id = payload_with_client['client_id']
+            client_process = self.client_processes[client_id]
+            send(response, to=client_process)
+            output("Responded to client with :", str(response_message))
+
+    def new_request(request_type, payload):
+        signed_payload = self.signing_key.sign(payload)
+        payload_with_client = {'replica_id': self.replica_id, 'payload': signed_payload}
+        return request_type, payload_with_client
 
     def verify_client(payload):
+        output('verifying client')
         client_id, signed_payload = payload['client_id'], payload['payload']
         try:
             if client_id in self.client_pks:
                 message = list(self.client_pks[client_id].verify(signed_payload))
-                return True, message
+                return True, {'client_id': client_id, 'payload': message}  # TODO: fix naming inconsistency
             return False, None
         except nacl.exceptions.BadSignatureError:
             return False, None

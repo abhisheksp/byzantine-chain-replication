@@ -7,17 +7,25 @@ olympus = import_da('olympus')
 
 
 def main():
+    # config and keys setup
     config = read_configuration('config.txt')
     config['initial_running_state'] = state.State({'key': 'value'})
-    client_singing_keys, client_verifying_keys = client_keys()
-    config['client_sks'] = client_singing_keys
-    config['client_vks'] = client_verifying_keys
+    client_sks, client_vks = client_keys()
+    config['client_sks'] = client_sks
+    config['client_vks'] = client_vks
+    replica_sks, replica_vks = replica_keys()
+    config['replica_sks'] = replica_sks
+    config['replica_vks'] = replica_vks
     olympus_singing_key, olympus_verifying_key = olympus_key()
     config['olympus_singing_key'] = olympus_singing_key
     config['olympus_verifying_key'] = olympus_verifying_key
+    # TODO: extend to multiple clients
     config['client_id'] = 1
+
+    #process setup
     client_process = new(client.Client, args=(config,))
-    olympus_process = new(olympus.Olympus, args=(client_process, config,))
+    client_processes = {1: client_process}
+    olympus_process = new(olympus.Olympus, args=(client_processes, config,))
     start(client_process)
     start(olympus_process)
 
@@ -29,6 +37,16 @@ def olympus_key():
 
 
 def client_keys():
+    # TODO: extend to multiple clients
+    signing_key = nacl.signing.SigningKey.generate()
+    verify_key = signing_key.verify_key
+    signing_keys = {1: signing_key}
+    verifying_keys = {1: verify_key}
+    return signing_keys, verifying_keys
+
+
+def replica_keys():
+    # TODO: extend to multiple replicas
     signing_key = nacl.signing.SigningKey.generate()
     verify_key = signing_key.verify_key
     signing_keys = {1: signing_key}
