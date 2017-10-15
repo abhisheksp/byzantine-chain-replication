@@ -1,5 +1,6 @@
 class Replica(process):
-    def setup(): pass
+    def setup(config,):
+        self.running_state = config.initial_running_state
 
     def run():
         await(False)

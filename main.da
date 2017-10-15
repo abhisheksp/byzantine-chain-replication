@@ -1,8 +1,24 @@
 client = import_da('client')
 olympus = import_da('olympus')
 
+
 def main():
-    client_process = new(client.Client, args=())
-    olympus_process = new(olympus.Olympus, args=(client_process,))
+    config = read_configuration('config.txt')
+    config['initial_running_state'] = {'key': 'value'}
+    client_process = new(client.Client, args=(config,))
+    olympus_process = new(olympus.Olympus, args=(client_process, config,))
     start(client_process)
     start(olympus_process)
+
+
+def read_configuration(filepath):
+    config = {}
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line[0] != '#':
+                (key, sep, val) = line.partition('=')
+                # if the line does not contain '=', it is invalid and hence ignored
+                if len(sep) != 0:
+                    val = val.strip()
+                    config[key.strip()] = int(val) if str.isdecimal(val) else val
+    return config
