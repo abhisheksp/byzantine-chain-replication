@@ -13,7 +13,8 @@ def main():
     client_sks, client_vks = client_keys()
     config['client_sks'] = client_sks
     config['client_vks'] = client_vks
-    replica_sks, replica_vks = replica_keys()
+    config['replica_count'] = 2 * config['t'] + 1
+    replica_sks, replica_vks = replica_keys(config['replica_count'])
     config['replica_sks'] = replica_sks
     config['replica_vks'] = replica_vks
     olympus_singing_key, olympus_verifying_key = olympus_key()
@@ -45,12 +46,13 @@ def client_keys():
     return signing_keys, verifying_keys
 
 
-def replica_keys():
+def replica_keys(replica_count):
     # TODO: extend to multiple replicas
-    signing_key = nacl.signing.SigningKey.generate()
-    verify_key = signing_key.verify_key
-    signing_keys = {1: signing_key}
-    verifying_keys = {1: verify_key}
+    signing_keys = {}
+    verifying_keys = {}
+    for replica_id in range(1, replica_count+1):
+        signing_keys[replica_id] = nacl.signing.SigningKey.generate()
+        verifying_keys[replica_id] = signing_keys[replica_id].verify_key
     return signing_keys, verifying_keys
 
 

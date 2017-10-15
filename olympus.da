@@ -5,15 +5,14 @@ class Olympus(process):
     def setup(client_processes, config):
         self.signing_key = config['olympus_singing_key']
         self.verifying_key = config['olympus_verifying_key']
+        self.replica_count = config['replica_count']
         output('Olympus setup finished...')
 
     def run():
-        replica_count = 1
-        replica_processes = {}
-        for i in range(1, replica_count + 1):
-            config['replica_id'] = i
-            replica_process = new(replica.Replica, args=(self.client_processes, config,))
-            replica_processes[i] = replica_process
+        replica_processes = {}  # TODO: use sets to use better DistAlgo features
+        for replica_id in range(1, self.replica_count + 1):
+            replica_process = new(replica.Replica, args=(self.client_processes, replica_id, config))
+            replica_processes[replica_id] = replica_process
             start(replica_process)
 
         # TODO: extend to multiple replicas

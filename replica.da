@@ -3,9 +3,8 @@ import pickle
 
 
 class Replica(process):
-    def setup(client_processes, config, ):
+    def setup(client_processes, replica_id, config, ):
         self.running_state = config['initial_running_state']
-        self.replica_id = config['replica_id']
         signing_key = config['replica_sks'][self.replica_id]
         self.verifying_key = config['replica_vks'][self.replica_id]  # TODO: required?
         self.client_pks = config['client_vks']
@@ -13,6 +12,7 @@ class Replica(process):
         self.sign = lambda x: signing_key.sign(x)
 
     def run():
+        output('Started Replica {}'.format(self.replica_id))
         await(False)
 
     def receive(msg=('request', raw_payload)):
