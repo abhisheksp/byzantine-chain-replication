@@ -44,14 +44,23 @@ class Client(process):
             return False, None
 
     def demo_requests():
-        # output('Sending Demo Payload: [1, 2, 3] from Client')
-        # demo_payload = pickle.dumps({1: 1, 2: 2, 3: 3})
-        # # demo_payload = [1, 2, 3]
-        # request = self.factory.new_request(self.sign(demo_payload))
-        # send(request, to=self.head)
-        #
-        # await(some(received(('response', b'OK',))))
         output('Starting Put Demo')
         put_operation = pickle.dumps(operation.new_put_operation('the first key', 'the first value'))
         request = self.factory.new_request(self.sign(put_operation))
         send(request, to=self.head)
+
+        output('Starting Get Demo')
+        get_operation = pickle.dumps(operation.new_get_operation('the first key'))
+        request = self.factory.new_request(self.sign(get_operation))
+        send(request, to=self.head)
+
+        output('Starting Append Demo')
+        append_operation = pickle.dumps(operation.new_append_operation('the first key', '!!'))
+        request = self.factory.new_request(self.sign(append_operation))
+        send(request, to=self.head)
+
+        output('Starting Slice Demo')
+        slice_operation = pickle.dumps(operation.new_slice_operation('the first key', '0:14'))
+        request = self.factory.new_request(self.sign(slice_operation))
+        send(request, to=self.head)
+

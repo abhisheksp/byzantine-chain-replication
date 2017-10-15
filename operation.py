@@ -11,4 +11,4 @@ def new_append_operation(key, val):
 
 
 def new_slice_operation(key, slice_):
-    return {'operation': 'append', 'key': key, 'slice': slice_}
+    return {'operation': 'slice', 'key': key, 'slice': slice_}

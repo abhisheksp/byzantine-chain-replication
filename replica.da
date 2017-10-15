@@ -33,9 +33,9 @@ class Replica(process):
         elif request_operation == 'get':
             return self.running_state.get(payload['key'])
         elif request_operation == 'append':
-            return self.running_state.get(payload['key'], payload['val'])
+            return self.running_state.append(payload['key'], payload['val'])
         elif request_operation == 'slice':
-            return self.running_state.get(payload['key'], payload['slice'])
+            return self.running_state.slice(payload['key'], payload['slice'])
         # TODO: handle unrecognized operation?
 
     def respond_to_client(client_id, response_message):
