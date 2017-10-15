@@ -1,4 +1,5 @@
 from message import Message
+import pickle
 
 
 class Replica(process):
@@ -14,24 +15,46 @@ class Replica(process):
     def run():
         await(False)
 
-    def receive(msg=('request', payload)):
-        is_verified, payload_with_client = verify_client(payload)
+    def receive(msg=('request', raw_payload)):
+        is_verified, payload_with_client = verify_client(raw_payload)
+        client_id = payload_with_client['client_id']
         if is_verified:
             output("Received Client Request, Payload:", payload_with_client['payload'])
-            response_message = b'OK'
-            response = self.factory.new_response(self.sign(response_message))
-            client_id = payload_with_client['client_id']
-            client_process = self.client_processes[client_id]
-            send(response, to=client_process)
-            output("Responded to client with :", str(response_message))
+            # respond_to_client(client_id, b'OK')
+            operation_response = apply_operation(payload_with_client['payload'])
+            response_message = bytes(operation_response, 'utf-8')
+            respond_to_client(client_id, response_message)
+            output_running_state()
+
+    def apply_operation(payload):
+        request_operation = payload['operation']
+        if request_operation == 'put':
+            return self.running_state.put(payload['key'], payload['val'])
+        elif request_operation == 'get':
+            return self.running_state.get(payload['key'])
+        elif request_operation == 'append':
+            return self.running_state.get(payload['key'], payload['val'])
+        elif request_operation == 'slice':
+            return self.running_state.get(payload['key'], payload['slice'])
+        # TODO: handle unrecognized operation?
+
+    def respond_to_client(client_id, response_message):
+        response = self.factory.new_response(self.sign(response_message))
+        client_process = self.client_processes[client_id]
+        send(response, to=client_process)
+        output("Responded to client with :", str(response_message))
 
     def verify_client(payload):
         output('verifying client')
         client_id, signed_payload = payload['id'], payload['payload']
         try:
             if client_id in self.client_pks:
-                message = list(self.client_pks[client_id].verify(signed_payload))
+                raw_message = self.client_pks[client_id].verify(signed_payload)
+                message = pickle.loads(raw_message)
                 return True, {'client_id': client_id, 'payload': message}  # TODO: fix naming inconsistency
             return False, None
         except nacl.exceptions.BadSignatureError:
             return False, None
+
+    def output_running_state():
+        output('Running State: ', self.running_state)

@@ -1,5 +1,7 @@
 from message import Message
+import operation
 import nacl
+import pickle
 
 
 class Client(process):
@@ -42,7 +44,14 @@ class Client(process):
             return False, None
 
     def demo_requests():
-        output('Sending Demo Payload: [1, 2, 3] from Client')
-        demo_payload = [1, 2, 3]
-        req = self.factory.new_request(self.sign(demo_payload))
-        send(req, to=self.head)
+        # output('Sending Demo Payload: [1, 2, 3] from Client')
+        # demo_payload = pickle.dumps({1: 1, 2: 2, 3: 3})
+        # # demo_payload = [1, 2, 3]
+        # request = self.factory.new_request(self.sign(demo_payload))
+        # send(request, to=self.head)
+        #
+        # await(some(received(('response', b'OK',))))
+        output('Starting Put Demo')
+        put_operation = pickle.dumps(operation.new_put_operation('the first key', 'the first value'))
+        request = self.factory.new_request(self.sign(put_operation))
+        send(request, to=self.head)

@@ -22,3 +22,6 @@ class State:
             self.value[key] = self.value[key][left:right]
             return 'OK'
         return 'FAIL'
+
+    def __repr__(self):
+        return '{}'.format(self.value)
