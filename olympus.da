@@ -1,12 +1,34 @@
+import nacl.encoding
+import nacl.signing
+import nacl.hash
+
 replica = import_da('replica')
 
 
 class Olympus(process):
-    def setup(client, config): pass
+    def setup(client, config):
+        self.signing_key = config['olympus_singing_key']
+        self.verifying_key = config['olympus_verifying_key']
+        output('Olympus setup finished...')
 
     def run():
-        replica_process = new(replica.Replica, args=(config,))
-        start(replica_process)
-        send(('new_configuration', replica_process,), to=client)
-        output("bringing up a replica")
+        replica_count = 1
+        replica_processes = {}
+        replica_sks, replica_vks = generate_replica_keys()
+        config['replica_sks'] = replica_sks
+        config['replica_vks'] = replica_vks
+        for i in range(1, replica_count + 1):
+            config['replica_id'] = i
+            replica_process = new(replica.Replica, args=(config,))
+            replica_processes[i] = replica_process
+            start(replica_process)
+
+        send(('new_configuration', replica_processes[1],), to=client)
         await(False)
+
+    def generate_replica_keys():
+        signing_key = nacl.signing.SigningKey.generate()
+        verify_key = signing_key.verify_key
+        signing_keys = {1: signing_key}
+        verifying_keys = {1: verify_key}
+        return signing_keys, verifying_keys

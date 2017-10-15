@@ -1,9 +1,25 @@
 class Replica(process):
-    def setup(config,):
-        self.running_state = config.initial_running_state
+    def setup(config, ):
+        self.running_state = config['initial_running_state']
+        replica_id = config['replica_id']
+        self.signing_key = config['replica_sks'][replica_id]
+        self.verifying_key = config['replica_vks'][replica_id]
+        self.client_pks = config['client_vks']
 
     def run():
         await(False)
 
     def receive(msg=('request', payload,)):
-        output("Received Client Request, Payload:", payload)
+        is_verified, payload = verify_client(payload)
+        if is_verified:
+            output("Received Client Request, Payload:", payload)
+
+    def verify_client(payload):
+        client_id, signed_payload = payload['client_id'], payload['payload']
+        try:
+            if client_id in self.client_pks:
+                message = list(self.client_pks[client_id].verify(signed_payload))
+                return True, message
+            return False, None
+        except nacl.exceptions.BadSignatureError:
+            return False, None

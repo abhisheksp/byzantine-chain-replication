@@ -1,6 +1,11 @@
 class Client(process):
     def setup(config):
         self.head = None
+        self.client_id = config['client_id']
+        self.signing_key = config['client_sks'][self.client_id]
+        self.verifying_key = config['client_vks'][self.client_id]
+        self.olympus_vk = config['olympus_verifying_key']
+        output('Client setup finished...')
 
     def run():
         output('Client is up...')
@@ -8,8 +13,14 @@ class Client(process):
         await(some(received(('new_configuration', _,))))
         output('Sending Demo Payload: [1, 2, 3] from Client')
         demo_payload = [1, 2, 3]
-        send(('request', demo_payload,), to=self.head)
+        request = new_request('request', demo_payload)
+        send(request, to=self.head)
 
-    def receive(msg=('new_configuration', obj,)):
+    def receive(msg=('new_configuration', payload,)):
         output('received new configuration from Olympus')
-        self.head = obj
+        self.head = payload
+
+    def new_request(request_type, payload):
+        signed_payload = self.signing_key.sign(payload)
+        payload_with_client = {'client_id': self.client_id, 'payload': signed_payload}
+        return request_type, payload_with_client
