@@ -1,37 +1,34 @@
+from request import Request
+
+
 class Client(process):
     def setup(config):
         self.head = None
         self.client_id = config['client_id']
-        self.signing_key = config['client_sks'][self.client_id]
+        signing_key = config['client_sks'][self.client_id]
+        self.sign = lambda x: signing_key.sign(x)
         self.verifying_key = config['client_vks'][self.client_id]
         self.olympus_vk = config['olympus_verifying_key']
         self.replica_vks = config['replica_vks']
+        self.request = Request(self.client_id)
         output('Client setup finished...')
 
     def run():
         output('Client is up...')
         output('awaiting new configuration from Olympus')
         await(some(received(('new_configuration', _,))))
-        output('Sending Demo Payload: [1, 2, 3] from Client')
-        demo_payload = [1, 2, 3]
-        request = new_request('request', demo_payload)
-        send(request, to=self.head)
+        demo_requests()
         await(False)
 
-    def receive(msg=('new_configuration', payload,)):
+    def receive(msg=('new_configuration', payload)):
         output('received new configuration from Olympus')
         self.head = payload
 
-    def receive(msg=('response', payload,)):
+    def receive(msg=('response', payload)):
         output('received response from replica')
         is_verified, payload = verify_replica(payload)
         if is_verified:
             output("Received Replica Response, Payload:", payload)
-
-    def new_request(request_type, payload):
-        signed_payload = self.signing_key.sign(payload)
-        payload_with_client = {'client_id': self.client_id, 'payload': signed_payload}
-        return request_type, payload_with_client
 
     def verify_replica(payload):
         replica_id, signed_payload = payload['replica_id'], payload['payload']
@@ -42,3 +39,9 @@ class Client(process):
             return False, None
         except nacl.exceptions.BadSignatureError:
             return False, None
+
+    def demo_requests():
+        output('Sending Demo Payload: [1, 2, 3] from Client')
+        demo_payload = [1, 2, 3]
+        req = self.request.new_request(self.sign(demo_payload))
+        send(req, to=self.head)
