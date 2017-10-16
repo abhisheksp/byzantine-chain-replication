@@ -49,18 +49,18 @@ class Client(process):
         request = self.factory.new_request(self.sign(put_operation))
         send(request, to=self.head)
 
-        output('Starting Get Demo')
-        get_operation = pickle.dumps(operation.new_get_operation('the first key'))
-        request = self.factory.new_request(self.sign(get_operation))
-        send(request, to=self.head)
-
-        output('Starting Append Demo')
-        append_operation = pickle.dumps(operation.new_append_operation('the first key', '!!'))
-        request = self.factory.new_request(self.sign(append_operation))
-        send(request, to=self.head)
-
-        output('Starting Slice Demo')
-        slice_operation = pickle.dumps(operation.new_slice_operation('the first key', '0:14'))
-        request = self.factory.new_request(self.sign(slice_operation))
-        send(request, to=self.head)
+        # output('Starting Get Demo')
+        # get_operation = pickle.dumps(operation.new_get_operation('the first key'))
+        # request = self.factory.new_request(self.sign(get_operation))
+        # send(request, to=self.head)
+        #
+        # output('Starting Append Demo')
+        # append_operation = pickle.dumps(operation.new_append_operation('the first key', '!!'))
+        # request = self.factory.new_request(self.sign(append_operation))
+        # send(request, to=self.head)
+        #
+        # output('Starting Slice Demo')
+        # slice_operation = pickle.dumps(operation.new_slice_operation('the first key', '0:14'))
+        # request = self.factory.new_request(self.sign(slice_operation))
+        # send(request, to=self.head)
 

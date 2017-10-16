@@ -9,7 +9,8 @@ class Replica(process):
         self.running_state = config['initial_running_state']
         signing_key = config['replica_sks'][self.replica_id]
         self.verifying_key = config['replica_vks'][self.replica_id]  # TODO: required?
-        self.client_pks = config['client_vks']
+        self.replica_vks = config['replica_vks']
+        self.client_vks = config['client_vks']
         self.factory = Message(self.replica_id)
         self.sign = lambda x: signing_key.sign(x)
         self.replica_processes = None
@@ -45,7 +46,34 @@ class Replica(process):
                 respond_to_client(client_id, response_message)
                 output_running_state()
 
+    def receive(msg=('request_shuttle', payload)):
+        if not self.is_head:
+            # verify replica
+            is_verified, replica_id, payload = verify_replica(payload)
+            if is_verified:
+                output('Replica {} : Received Request Shuttle from Replica {}, Payload: {}'.format(
+                    self.replica_id, replica_id, payload))
+
+                # TODO: verify order_proof
+                operation = payload['operation']
+                client_id = payload['client_id']
+                request_id = payload['request_id']
+                slot = payload['slot']
+                previous_order_statements = payload['order_statements']
+                order_statement = self.factory.new_order_statement(operation, slot)
+                order_proof = self.factory.new_order_proof(client_id, request_id, slot, operation, 'c', order_statement,
+                                                           previous_order_statements)
+                # apply operation
+                operation_response = apply_operation(operation)
+                response_message = bytes(operation_response, 'utf-8')
+                serialized_order_proof = pickle.dumps(order_proof)
+                request_shuttle = self.factory.new_request_shuttle(self.sign(serialized_order_proof))
+                forward_request(request_shuttle)
+                # respond_to_client(client_id, response_message)
+                output_running_state()
+
     def forward_request(request_shuttle):
+        # print('Replica ID: {}, {}'.format(self.replica_id, self.replica_processes))
         if self.replica_id + 1 <= len(self.replica_processes):
             output('Replica {} : forwarding request to Replica: {}'.format(self.replica_id, self.replica_id + 1))
             send(request_shuttle, to=self.replica_processes[self.replica_id + 1])
@@ -71,10 +99,21 @@ class Replica(process):
     def verify_client(payload):
         client_id, request_id, signed_payload = payload['id'], payload['request_id'], payload['payload']
         try:
-            if client_id in self.client_pks:
-                raw_message = self.client_pks[client_id].verify(signed_payload)
+            if client_id in self.client_vks:
+                raw_message = self.client_vks[client_id].verify(signed_payload)
                 unsigned_payload = pickle.loads(raw_message)
                 return True, client_id, request_id, unsigned_payload  # TODO: fix naming inconsistency
+            return False, None
+        except nacl.exceptions.BadSignatureError:
+            return False, None
+
+    def verify_replica(payload):
+        replica_id, signed_payload = payload['replica_id'], payload['payload']
+        try:
+            if replica_id in self.replica_vks:
+                raw_message = self.replica_vks[replica_id].verify(signed_payload)
+                unsigned_payload = pickle.loads(raw_message)
+                return True, replica_id, unsigned_payload  # TODO: fix naming inconsistency
             return False, None
         except nacl.exceptions.BadSignatureError:
             return False, None

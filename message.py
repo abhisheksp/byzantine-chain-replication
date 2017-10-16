@@ -1,5 +1,6 @@
 import uuid
 
+
 class Message:
     client_request = 'request'
     replica_response = 'response'
@@ -22,8 +23,8 @@ class Message:
         message_body = {'replica_id': self.identifier, 'payload': payload}
         return self.request_shuttle, message_body
 
-    def new_order_statement(self, operation):
-        slot = uuid.uuid4()
+    def new_order_statement(self, operation, slot=None):
+        slot = slot if slot else uuid.uuid4()
         order_statement = {
             'slot': slot,
             'operation': operation,
@@ -33,7 +34,7 @@ class Message:
 
     def new_order_proof(self, client_id, request_id, slot, operation, configuration, new_order_statement,
                         old_order_statements):
-        order_statements = [old_order_statements] + [new_order_statement]
+        order_statements = old_order_statements + [new_order_statement]
 
         # TODO: figure out serializing named tuple
         order_proof = {
