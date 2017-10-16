@@ -16,5 +16,7 @@ class Olympus(process):
             start(replica_process)
 
         # TODO: extend to multiple replicas
+        replica_processes_set = {replica for replica in replica_processes.values()}
         send(('new_configuration', replica_processes[1],), to=self.client_processes[1])
+        send(('new_configuration', replica_processes), to=replica_processes_set)
         await(False)

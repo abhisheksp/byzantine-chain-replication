@@ -1,5 +1,7 @@
-from message import Message
 import pickle
+import nacl
+
+from message import Message
 
 
 class Replica(process):
@@ -10,21 +12,32 @@ class Replica(process):
         self.client_pks = config['client_vks']
         self.factory = Message(self.replica_id)
         self.sign = lambda x: signing_key.sign(x)
+        self.replica_processes = None
 
     def run():
         output('Started Replica {}'.format(self.replica_id))
+        await(some(received(('new_configuration', _,))))
         await(False)
+
+    def receive(msg=('new_configuration', payload)):
+        output('Replica {} received other replica details'.format(self.replica_id))
+        self.replica_processes = payload
 
     def receive(msg=('request', raw_payload)):
         is_verified, payload_with_client = verify_client(raw_payload)
         client_id = payload_with_client['client_id']
         if is_verified:
-            output("Received Client Request, Payload:", payload_with_client['payload'])
+            output('Received Client Request, Payload:', payload_with_client['payload'])
+            # forward_request(raw_payload)
             # respond_to_client(client_id, b'OK')
             operation_response = apply_operation(payload_with_client['payload'])
             response_message = bytes(operation_response, 'utf-8')
             respond_to_client(client_id, response_message)
             output_running_state()
+
+    # def forward_request(raw_payload):
+    #     output('forwarding request to Replica: {}'.format(self.replica_id + 1))
+    #     send(('request', raw_payload), to=#next replica)
 
     def apply_operation(payload):
         request_operation = payload['operation']
@@ -36,7 +49,7 @@ class Replica(process):
             return self.running_state.append(payload['key'], payload['val'])
         elif request_operation == 'slice':
             return self.running_state.slice(payload['key'], payload['slice'])
-        # TODO: handle unrecognized operation?
+            # TODO: handle unrecognized operation?
 
     def respond_to_client(client_id, response_message):
         response = self.factory.new_response(self.sign(response_message))
