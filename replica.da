@@ -27,17 +27,17 @@ class Replica(process):
         is_verified, payload_with_client = verify_client(raw_payload)
         client_id = payload_with_client['client_id']
         if is_verified:
-            output('Received Client Request, Payload:', payload_with_client['payload'])
-            # forward_request(raw_payload)
-            # respond_to_client(client_id, b'OK')
+            output('Replica {} : Received Client Request, Payload: {}'.format(self.replica_id, payload_with_client['payload']))
+            forward_request(raw_payload)
             operation_response = apply_operation(payload_with_client['payload'])
             response_message = bytes(operation_response, 'utf-8')
             respond_to_client(client_id, response_message)
             output_running_state()
 
-    # def forward_request(raw_payload):
-    #     output('forwarding request to Replica: {}'.format(self.replica_id + 1))
-    #     send(('request', raw_payload), to=#next replica)
+    def forward_request(raw_payload):
+        if self.replica_id +1 <= len(self.replica_processes):
+            output('Replica {} : forwarding request to Replica: {}'.format(self.replica_id, self.replica_id + 1))
+            send(('request', raw_payload), to=self.replica_processes[self.replica_id + 1])
 
     def apply_operation(payload):
         request_operation = payload['operation']
@@ -55,10 +55,9 @@ class Replica(process):
         response = self.factory.new_response(self.sign(response_message))
         client_process = self.client_processes[client_id]
         send(response, to=client_process)
-        output("Responded to client with :", str(response_message))
+        output("Replica {} : Responded to client with : {}".format(self.replica_id, response_message))
 
     def verify_client(payload):
-        output('verifying client')
         client_id, signed_payload = payload['id'], payload['payload']
         try:
             if client_id in self.client_pks:
@@ -70,4 +69,4 @@ class Replica(process):
             return False, None
 
     def output_running_state():
-        output('Running State: ', self.running_state)
+        output('Replica {} : Running State: {}'.format(self.replica_id, self.running_state))
