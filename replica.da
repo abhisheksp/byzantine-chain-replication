@@ -5,7 +5,7 @@ from message import Message
 
 
 class Replica(process):
-    def setup(client_processes, replica_id, config, ):
+    def setup(client_processes, replica_id, config):
         self.running_state = config['initial_running_state']
         signing_key = config['replica_sks'][self.replica_id]
         self.verifying_key = config['replica_vks'][self.replica_id]  # TODO: required?
@@ -13,6 +13,8 @@ class Replica(process):
         self.factory = Message(self.replica_id)
         self.sign = lambda x: signing_key.sign(x)
         self.replica_processes = None
+        self.is_head = self.replica_id == 1  # TODO: extract constant
+        self.is_tail = self.replica_id == config['replica_count']  # TODO: use linked list?
 
     def run():
         output('Started Replica {}'.format(self.replica_id))
@@ -23,31 +25,40 @@ class Replica(process):
         output('Replica {} received other replica details'.format(self.replica_id))
         self.replica_processes = payload
 
-    def receive(msg=('request', raw_payload)):
-        is_verified, payload_with_client = verify_client(raw_payload)
-        client_id = payload_with_client['client_id']
-        if is_verified:
-            output('Replica {} : Received Client Request, Payload: {}'.format(self.replica_id, payload_with_client['payload']))
-            forward_request(raw_payload)
-            operation_response = apply_operation(payload_with_client['payload'])
-            response_message = bytes(operation_response, 'utf-8')
-            respond_to_client(client_id, response_message)
-            output_running_state()
+    def receive(msg=('request', payload)):
+        if self.is_head:
+            is_verified, client_id, request_id, payload = verify_client(payload)
+            if is_verified:
+                output('Replica {} : Received Client Request, Payload: {}'.format(self.replica_id,
+                                                                                  payload))
 
-    def forward_request(raw_payload):
-        if self.replica_id +1 <= len(self.replica_processes):
+                operation = payload
+                order_statement = self.factory.new_order_statement(payload)
+                slot = order_statement['slot']
+                order_proof = self.factory.new_order_proof(client_id, request_id, slot, operation, 'c', order_statement,
+                                                           [])
+                operation_response = apply_operation(operation)
+                response_message = bytes(operation_response, 'utf-8')
+                serialized_order_proof = pickle.dumps(order_proof)
+                request_shuttle = self.factory.new_request_shuttle(self.sign(serialized_order_proof))
+                forward_request(request_shuttle)
+                respond_to_client(client_id, response_message)
+                output_running_state()
+
+    def forward_request(request_shuttle):
+        if self.replica_id + 1 <= len(self.replica_processes):
             output('Replica {} : forwarding request to Replica: {}'.format(self.replica_id, self.replica_id + 1))
-            send(('request', raw_payload), to=self.replica_processes[self.replica_id + 1])
+            send(request_shuttle, to=self.replica_processes[self.replica_id + 1])
 
     def apply_operation(payload):
-        request_operation = payload['operation']
-        if request_operation == 'put':
+        operation = payload['operation']
+        if operation == 'put':
             return self.running_state.put(payload['key'], payload['val'])
-        elif request_operation == 'get':
+        elif operation == 'get':
             return self.running_state.get(payload['key'])
-        elif request_operation == 'append':
+        elif operation == 'append':
             return self.running_state.append(payload['key'], payload['val'])
-        elif request_operation == 'slice':
+        elif operation == 'slice':
             return self.running_state.slice(payload['key'], payload['slice'])
             # TODO: handle unrecognized operation?
 
@@ -58,12 +69,12 @@ class Replica(process):
         output("Replica {} : Responded to client with : {}".format(self.replica_id, response_message))
 
     def verify_client(payload):
-        client_id, signed_payload = payload['id'], payload['payload']
+        client_id, request_id, signed_payload = payload['id'], payload['request_id'], payload['payload']
         try:
             if client_id in self.client_pks:
                 raw_message = self.client_pks[client_id].verify(signed_payload)
-                message = pickle.loads(raw_message)
-                return True, {'client_id': client_id, 'payload': message}  # TODO: fix naming inconsistency
+                unsigned_payload = pickle.loads(raw_message)
+                return True, client_id, request_id, unsigned_payload  # TODO: fix naming inconsistency
             return False, None
         except nacl.exceptions.BadSignatureError:
             return False, None
