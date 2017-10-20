@@ -7,26 +7,27 @@ olympus = import_da('olympus')
 
 
 def main():
+    config(channel='reliable')
     # config and keys setup
-    config = read_configuration('config.txt')
-    config['initial_running_state'] = state.State({'key': 'value'})
+    configuration = read_configuration('config.txt')
+    configuration['initial_running_state'] = state.State({'key': 'value'})
     client_sks, client_vks = client_keys()
-    config['client_sks'] = client_sks
-    config['client_vks'] = client_vks
-    config['replica_count'] = 2 * config['t'] + 1
-    replica_sks, replica_vks = replica_keys(config['replica_count'])
-    config['replica_sks'] = replica_sks
-    config['replica_vks'] = replica_vks
+    configuration['client_sks'] = client_sks
+    configuration['client_vks'] = client_vks
+    configuration['replica_count'] = 2 * configuration['t'] + 1
+    replica_sks, replica_vks = replica_keys(configuration['replica_count'])
+    configuration['replica_sks'] = replica_sks
+    configuration['replica_vks'] = replica_vks
     olympus_singing_key, olympus_verifying_key = olympus_key()
-    config['olympus_singing_key'] = olympus_singing_key
-    config['olympus_verifying_key'] = olympus_verifying_key
+    configuration['olympus_singing_key'] = olympus_singing_key
+    configuration['olympus_verifying_key'] = olympus_verifying_key
     # TODO: extend to multiple clients
-    config['client_id'] = 1
+    configuration['client_id'] = 1
 
     #process setup
-    client_process = new(client.Client, args=(config,))
+    client_process = new(client.Client, args=(configuration,))
     client_processes = {1: client_process}
-    olympus_process = new(olympus.Olympus, args=(client_processes, config,))
+    olympus_process = new(olympus.Olympus, args=(client_processes, configuration,))
     start(client_process)
     start(olympus_process)
 
