@@ -15,6 +15,7 @@ class Replica(process):
         self.sign = lambda x: signing_key.sign(x)
         self.replica_processes = None
         self.is_head = self.replica_id == 1  # TODO: extract constant
+        self.is_tail = self.replica_id == self.config['replica_count']
 
     def run():
         output('Started Replica {}'.format(self.replica_id))
@@ -31,53 +32,52 @@ class Replica(process):
             if is_verified:
                 output('Replica {} : Received Client Request, Payload: {}'.format(self.replica_id,
                                                                                   payload))
-
-                operation = payload
-                order_statement = self.factory.new_order_statement(payload)
-                slot = order_statement['slot']
-                order_proof = self.factory.new_order_proof(client_id, request_id, slot, operation, 'c', order_statement,
-                                                           [])
+                order_statement = self.factory.new_order_statement({'operation': payload})
+                operation = order_statement['operation']
+                new_order_proof_details = {
+                    'client_id': client_id,
+                    'request_id': request_id,
+                    'slot': order_statement['slot'],
+                    'operation': operation,
+                    'order_statements': []
+                }
+                # TODO: suspend on invalid operation request?
                 operation_response = apply_operation(operation)
-                # response_message = bytes(operation_response, 'utf-8')
-                serialized_order_proof = pickle.dumps(order_proof)
-                request_shuttle = self.factory.new_request_shuttle(self.sign(serialized_order_proof))
+                order_proof = self.factory.new_order_proof(new_order_proof_details, order_statement)
+                request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(order_proof))
                 forward_request(request_shuttle)
-                # respond_to_client(client_id, response_message)
                 output_running_state()
 
     def receive(msg=('request_shuttle', payload)):
         if not self.is_head:
-            # verify replica
-            is_verified, replica_id, payload = verify_replica(payload)
+            # TODO: better name for replica and need for it?
+            is_verified, sender_replica_id, payload = verify_replica(payload)
             if is_verified:
                 output('Replica {} : Received Request Shuttle from Replica {}, Payload: {}'.format(
-                    self.replica_id, replica_id, payload))
+                    self.replica_id, sender_replica_id, payload))
 
                 # TODO: verify order_proof
-                operation = payload['operation']
-                client_id = payload['client_id']
-                request_id = payload['request_id']
-                slot = payload['slot']
-                previous_order_statements = payload['order_statements']
-                order_statement = self.factory.new_order_statement(operation, slot)
-                order_proof = self.factory.new_order_proof(client_id, request_id, slot, operation, 'c', order_statement,
-                                                           previous_order_statements)
-                # apply operation
+                client_id, operation = payload['client_id'], payload['operation']
+                order_statement = self.factory.new_order_statement(payload)
+                order_proof = self.factory.new_order_proof(payload, order_statement)
                 operation_response = apply_operation(operation)
-                serialized_order_proof = pickle.dumps(order_proof)
-                request_shuttle = self.factory.new_request_shuttle(self.sign(serialized_order_proof))
+                request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(order_proof))
                 forward_request(request_shuttle)
-                if self.replica_id == self.config['replica_count']:  # TODO: use is_tail as state, figure out bug
+                if self.is_tail:  # TODO: use is_tail as state, figure out bug
                     response_message = bytes(operation_response, 'utf-8')
                     output('Replica {} : Sending Response to client'.format(self.replica_id))
                     respond_to_client(client_id, response_message)
                 output_running_state()
 
+    def serialize_and_sign(payload):
+        serialized_payload = pickle.dumps(payload)
+        return self.sign(serialized_payload)
+
     def forward_request(request_shuttle):
-        # print('Replica ID: {}, {}'.format(self.replica_id, self.replica_processes))
+        next_replica_id = self.replica_id + 1
         if self.replica_id + 1 <= len(self.replica_processes):
-            output('Replica {} : forwarding request to Replica: {}'.format(self.replica_id, self.replica_id + 1))
-            send(request_shuttle, to=self.replica_processes[self.replica_id + 1])
+            output('Replica {} : forwarding request to Replica: {}'.format(self.replica_id, next_replica_id))
+            send(request_shuttle, to=self.replica_processes[next_replica_id])
 
     def apply_operation(payload):
         operation = payload['operation']
@@ -109,12 +109,12 @@ class Replica(process):
             return False, None
 
     def verify_replica(payload):
-        replica_id, signed_payload = payload['replica_id'], payload['payload']
+        sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
         try:
-            if replica_id in self.replica_vks:
-                raw_message = self.replica_vks[replica_id].verify(signed_payload)
+            if sender_replica_id in self.replica_vks:
+                raw_message = self.replica_vks[sender_replica_id].verify(signed_payload)
                 unsigned_payload = pickle.loads(raw_message)
-                return True, replica_id, unsigned_payload  # TODO: fix naming inconsistency
+                return True, sender_replica_id, unsigned_payload  # TODO: fix naming inconsistency
             return False, None
         except nacl.exceptions.BadSignatureError:
             return False, None
