@@ -21,6 +21,7 @@ class Replica(process):
         self.prev_replica = None
         self.slot = Slot()
         self.result_shuttle_cache = {}
+        self.olympus = None
 
     def run():
         output('Started Replica {}'.format(self.replica_id))
@@ -28,8 +29,8 @@ class Replica(process):
         await(False)
 
     def receive(msg=('new_configuration', payload)):
-        output('Replica {} received other replica details'.format(self.replica_id))
-        self.replica_processes = payload
+        output('Replica {} Received New Configuration from Olympus'.format(self.replica_id))
+        self.olympus, self.replica_processes = payload['olympus'], payload['replicas']
         self.next_replica = None if self.is_tail else self.replica_processes[self.replica_id + 1]
         self.prev_replica = None if self.is_head else self.replica_processes[self.replica_id - 1]
 
@@ -109,6 +110,8 @@ class Replica(process):
         is_verified = verify_order_proof(prev_order_proof)
         if not is_verified:
             output('Proof of Misbehaviour')
+            proof_of_misbehaviour = 'Proof of Misbehaviour'
+            send_reconfiguration_request(proof_of_misbehaviour)
             return
         client_id, operation = prev_order_proof.client_id, prev_order_proof.operation
         order_statement = self.factory.new_order_statement(prev_order_proof.operation, prev_order_proof.slot)
@@ -151,6 +154,13 @@ class Replica(process):
         if not self.is_head:
             output('Replica {} : forwarding response to Replica: {}'.format(self.replica_id, self.replica_id - 1))
             send(result_shuttle, to=self.prev_replica)
+
+    def send_reconfiguration_request(proof_of_misbehaviour):
+        output('Replica {} : Raising Reconfiguration Request'.format(self.replica_id))
+        type_ = 'replica'
+        signed_message = serialize_and_sign(proof_of_misbehaviour)
+        reconfig_request = self.factory.new_reconfiguration_request(type_, signed_message)
+        send(reconfig_request, to=self.olympus)
 
     def apply_operation(payload):
         operation = payload['operation']

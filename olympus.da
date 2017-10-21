@@ -17,6 +17,11 @@ class Olympus(process):
 
         # TODO: extend to multiple replicas
         replica_processes_set = set(replica_processes.values())
-        send(('new_configuration', replica_processes[1],), to=self.client_processes[1])
-        send(('new_configuration', replica_processes), to=replica_processes_set)
+        client_payload = {'olympus': self, 'head': replica_processes[1]}
+        replicas_payload = {'olympus': self, 'replicas': replica_processes}
+        send(('new_configuration', client_payload), to=self.client_processes[1])
+        send(('new_configuration', replicas_payload), to=replica_processes_set)
         await(False)
+
+    def receive(msg=('reconfiguration_request', payload)):
+        output('Reconfiguration Request Raised')

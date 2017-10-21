@@ -9,6 +9,7 @@ class Message:
     client_request_tag = 'request'
     client_retransmission_tag = 'retransmission'
     replica_response_tag = 'response'
+    reconfiguration_tag = 'reconfiguration_request'
     request_shuttle_tag = 'request_shuttle'
     result_shuttle_tag = 'result_shuttle'
     OrderStatement = namedtuple('OrderStatement', 'slot operation replica_id')
@@ -35,6 +36,10 @@ class Message:
     def new_retransmission_request(self, old_request_id, payload):
         message_body = {'client_id': self.identifier, 'request_id': old_request_id, 'payload': payload}
         return self.client_retransmission_tag, message_body
+
+    def new_reconfiguration_request(self, type_, payload):
+        message_body = {'id': self.identifier, 'type': type_, 'payload': payload}
+        return self.reconfiguration_tag, message_body
 
     def new_response(self, payload):
         message_body = {'replica_id': self.identifier, 'payload': payload}

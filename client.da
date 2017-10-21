@@ -7,6 +7,7 @@ from message import Message
 class Client(process):
     def setup(config):
         self.head = None
+        self.olympus = None
         self.client_id = config['client_id']
         signing_key = config['client_sks'][self.client_id]
         self.sign = lambda x: signing_key.sign(x)
@@ -27,7 +28,7 @@ class Client(process):
 
     def receive(msg=('new_configuration', payload)):
         output('received new configuration from Olympus')
-        self.head = payload
+        self.olympus, self.head = payload['olympus'], payload['head']
 
     def receive(msg=('response', payload)):
         output('received response from replica')
