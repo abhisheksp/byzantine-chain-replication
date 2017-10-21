@@ -6,10 +6,10 @@ from collections import namedtuple
 
 
 class Message:
-    client_request = 'request'
-    replica_response = 'response'
+    client_request_tag = 'request'
+    replica_response_tag = 'response'
     request_shuttle_tag = 'request_shuttle'
-    response_shuttle_tag = 'response_shuttle'
+    result_shuttle_tag = 'result_shuttle'
     OrderStatement = namedtuple('OrderStatement', 'slot operation replica_id')
     OrderProof = namedtuple(
         'OrderProof',
@@ -21,28 +21,27 @@ class Message:
         'client_id request_id result operation configuration result_statements'
     )
     RequestShuttle = namedtuple('RequestShuttle', 'order_proof result_proof')
-    ResponseShuttle = namedtuple('ResponseShuttle', 'result result_proof')
+    ResultShuttle = namedtuple('ResponseShuttle', 'result result_proof')
 
     def __init__(self, identifier):
         self.identifier = identifier
 
     def new_request(self, payload):
         request_id = uuid.uuid4()
-        # TODO: make id explicit
         message_body = {'client_id': self.identifier, 'request_id': request_id, 'payload': payload}
-        return self.client_request, message_body
+        return self.client_request_tag, message_body
 
     def new_response(self, payload):
-        message_body = {'replica_id': self.identifier, 'payload': payload}  # TODO: make id explicit
-        return self.replica_response, message_body
+        message_body = {'replica_id': self.identifier, 'payload': payload}
+        return self.replica_response_tag, message_body
 
     def new_request_shuttle(self, payload):
         message_body = {'replica_id': self.identifier, 'payload': payload}
         return self.request_shuttle_tag, message_body
 
-    def new_response_shuttle(self, payload):
+    def new_result_shuttle(self, payload):
         message_body = {'replica_id': self.identifier, 'payload': payload}
-        return self.response_shuttle_tag, message_body
+        return self.result_shuttle_tag, message_body
 
     def new_order_statement(self, operation, slot):
         order_statement = {

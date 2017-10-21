@@ -49,14 +49,14 @@ class Replica(process):
                 prev_req_shuttle = parse_request_shuttle(payload)
                 handle_request_shuttle(prev_req_shuttle)
 
-    def receive(msg=('response_shuttle', payload)):
+    def receive(msg=('result_shuttle', payload)):
         is_verified, sender_replica_id, payload = verify_replica(payload)
         if is_verified:
-            output('Replica {} : Received Response Shuttle from Replica: {}, Payload: {}'.format(self.replica_id,
+            output('Replica {} : Received Result Shuttle from Replica: {}, Payload: {}'.format(self.replica_id,
                                                                                                  sender_replica_id,
                                                                                                  payload))
-            response_shuttle = parse_response_shuttle(payload)
-            handle_response_shuttle(response_shuttle)
+            result_shuttle = parse_result_shuttle(payload)
+            handle_result_shuttle(result_shuttle)
 
     def handle_client_request(client_id, request_id, operation):
         output('Replica {} : Received Client Request, Payload: {}'.format(self.replica_id, operation))
@@ -94,10 +94,10 @@ class Replica(process):
         result_proof = self.factory.ResultProof(**payload['result_proof'])
         return self.factory.RequestShuttle(order_proof, result_proof)
 
-    def parse_response_shuttle(payload):
+    def parse_result_shuttle(payload):
         result = payload['result']
         result_proof = self.factory.ResultProof(**payload['result_proof'])
-        return self.factory.ResponseShuttle(result, result_proof)
+        return self.factory.ResultShuttle(result, result_proof)
 
     def handle_request_shuttle(prev_req_shuttle):
         # TODO: verify order_proof
@@ -112,22 +112,21 @@ class Replica(process):
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
         forward_request_shuttle(request_shuttle)
         if self.is_tail:
-            # response_message = bytes(result, 'utf-8')
             output('Replica {} : Sending Response to client'.format(self.replica_id))
-            response_shuttle_payload = serialize_and_sign({'result': result, 'result_proof': result_proof})
-            response_shuttle = self.factory.new_response_shuttle(response_shuttle_payload)
-            respond_to_client(client_id, response_shuttle_payload)
-            forward_response_shuttle(response_shuttle)
+            result_shuttle_payload = serialize_and_sign({'result': result, 'result_proof': result_proof})
+            result_shuttle = self.factory.new_result_shuttle(result_shuttle_payload)
+            respond_to_client(client_id, result_shuttle_payload)
+            forward_result_shuttle(result_shuttle)
         output_running_state()
 
-    def handle_response_shuttle(response_shuttle):
-        result_proof = response_shuttle.result_proof
+    def handle_result_shuttle(result_shuttle):
+        result_proof = result_shuttle.result_proof
         client_id, request_id = result_proof.client_id, result_proof.request_id
-        self.result_shuttle_cache[(client_id, request_id)] = response_shuttle
-        response_shuttle_payload = {'result': response_shuttle.result,
-                                    'result_proof': response_shuttle.result_proof._asdict()}
-        response_shuttle = self.factory.new_response_shuttle(serialize_and_sign(response_shuttle_payload))
-        forward_response_shuttle(response_shuttle)
+        self.result_shuttle_cache[(client_id, request_id)] = result_shuttle
+        result_shuttle_payload = {'result': result_shuttle.result,
+                                    'result_proof': result_shuttle.result_proof._asdict()}
+        result_shuttle = self.factory.new_result_shuttle(serialize_and_sign(result_shuttle_payload))
+        forward_result_shuttle(result_shuttle)
         # output_cache()
 
     def serialize_and_sign(payload):
@@ -139,10 +138,10 @@ class Replica(process):
             output('Replica {} : forwarding request to Replica: {}'.format(self.replica_id, self.replica_id + 1))
             send(request_shuttle, to=self.next_replica)
 
-    def forward_response_shuttle(response_shuttle):
+    def forward_result_shuttle(result_shuttle):
         if not self.is_head:
             output('Replica {} : forwarding response to Replica: {}'.format(self.replica_id, self.replica_id - 1))
-            send(response_shuttle, to=self.prev_replica)
+            send(result_shuttle, to=self.prev_replica)
 
     def apply_operation(payload):
         operation = payload['operation']
@@ -156,11 +155,11 @@ class Replica(process):
             return self.running_state.slice(payload['key'], payload['slice'])
             # TODO: handle unrecognized operation?
 
-    def respond_to_client(client_id, response_shuttle):
-        response = self.factory.new_response(response_shuttle)
+    def respond_to_client(client_id, result_shuttle):
+        response = self.factory.new_response(result_shuttle)
         client_process = self.client_processes[client_id]
         send(response, to=client_process)
-        output("Replica {} : Responded to client with : {}".format(self.replica_id, response_shuttle))
+        output("Replica {} : Responded to client with : {}".format(self.replica_id, result_shuttle))
 
     def verify_client(payload):
         client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
