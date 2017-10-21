@@ -102,6 +102,10 @@ class Replica(process):
     def handle_request_shuttle(prev_req_shuttle):
         # TODO: verify order_proof
         prev_order_proof, prev_result_proof = prev_req_shuttle.order_proof, prev_req_shuttle.result_proof
+        is_verified = verify_order_proof(prev_order_proof)
+        if not is_verified:
+            output('Proof of Misbehaviour')
+            return
         client_id, operation = prev_order_proof.client_id, prev_order_proof.operation
         order_statement = self.factory.new_order_statement(prev_order_proof.operation, prev_order_proof.slot)
         order_proof = self.factory.new_order_proof(prev_order_proof, order_statement)
@@ -182,6 +186,15 @@ class Replica(process):
             return False, None
         except nacl.exceptions.BadSignatureError:
             return False, None
+
+    def verify_order_proof(order_proof):
+        slot = order_proof.slot
+        operation = order_proof.operation
+        order_stmts = order_proof.order_statements
+        preceding_replica_count = self.replica_id - 1
+        is_proper_count = preceding_replica_count == len(order_stmts)
+        is_consistent = all(slot == os['slot'] and operation == os['operation'] for os in order_stmts)
+        return is_proper_count, is_consistent
 
     def output_running_state():
         output('Replica {} : Running State: {}'.format(self.replica_id, self.running_state))

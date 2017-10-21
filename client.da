@@ -45,7 +45,6 @@ class Client(process):
         request_id = request[1]['request_id']
         self.pending_requests.add(request_id)
         send(request, to=self.head)
-        output('request timeout', self.request_timeout)
         if await(request_id not in self.pending_requests):
             pass
         elif timeout(self.request_timeout):
