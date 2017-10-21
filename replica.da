@@ -17,7 +17,9 @@ class Replica(process):
         self.is_head = self.replica_id == 1  # TODO: extract constant
         self.is_tail = self.replica_id == self.config['replica_count']
         self.next_replica = None
+        self.prev_replica = None
         self.slot = Slot()
+        self.result_shuttle_cache = {}
 
     def run():
         output('Started Replica {}'.format(self.replica_id))
@@ -28,6 +30,7 @@ class Replica(process):
         output('Replica {} received other replica details'.format(self.replica_id))
         self.replica_processes = payload
         self.next_replica = None if self.is_tail else self.replica_processes[self.replica_id + 1]
+        self.prev_replica = None if self.is_head else self.replica_processes[self.replica_id - 1]
 
     def receive(msg=('request', payload)):
         if self.is_head:
@@ -45,9 +48,17 @@ class Replica(process):
                 prev_req_shuttle = parse_request_shuttle(payload)
                 handle_request_shuttle(prev_req_shuttle)
 
+    def receive(msg=('response_shuttle', payload)):
+        is_verified, sender_replica_id, payload = verify_replica(payload)
+        if is_verified:
+            output('Replica {} : Received Response Shuttle from Replica: {}, Payload: {}'.format(self.replica_id,
+                                                                                                 sender_replica_id,
+                                                                                                 payload))
+            response_shuttle = parse_response_shuttle(payload)
+            handle_response_shuttle(response_shuttle)
+
     def handle_client_request(client_id, request_id, operation):
-        output('Replica {} : Received Client Request, Payload: {}'.format(self.replica_id,
-                                                                          operation))
+        output('Replica {} : Received Client Request, Payload: {}'.format(self.replica_id, operation))
         order_statement = self.factory.new_order_statement(operation, next(self.slot))
         new_order_proof_details = {
             'client_id': client_id,
@@ -74,13 +85,18 @@ class Replica(process):
         result_proof = self.factory.new_result_proof(empty_result_proof, result_statement)
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
-        forward_request(request_shuttle)
+        forward_request_shuttle(request_shuttle)
         output_running_state()
 
     def parse_request_shuttle(payload):
         order_proof = self.factory.OrderProof(**payload['order_proof'])
         result_proof = self.factory.ResultProof(**payload['result_proof'])
         return self.factory.RequestShuttle(order_proof, result_proof)
+
+    def parse_response_shuttle(payload):
+        result = payload['result']
+        result_proof = self.factory.ResultProof(**payload['result_proof'])
+        return self.factory.ResponseShuttle(result, result_proof)
 
     def handle_request_shuttle(prev_req_shuttle):
         # TODO: verify order_proof
@@ -93,21 +109,38 @@ class Replica(process):
         result_proof = self.factory.new_result_proof(prev_result_proof, result_statement)
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
-        forward_request(request_shuttle)
+        forward_request_shuttle(request_shuttle)
         if self.is_tail:
             response_message = bytes(result, 'utf-8')
             output('Replica {} : Sending Response to client'.format(self.replica_id))
             respond_to_client(client_id, response_message)
+            response_shuttle_payload = {'result': result, 'result_proof': result_proof}
+            response_shuttle = self.factory.new_response_shuttle(serialize_and_sign(response_shuttle_payload))
+            forward_response_shuttle(response_shuttle)
         output_running_state()
+
+    def handle_response_shuttle(response_shuttle):
+        result_proof = response_shuttle.result_proof
+        client_id, request_id = result_proof.client_id, result_proof.request_id
+        self.result_shuttle_cache[(client_id, request_id)] = response_shuttle
+        response_shuttle_payload = {'result': response_shuttle.result,
+                                    'result_proof': response_shuttle.result_proof._asdict()}
+        response_shuttle = self.factory.new_response_shuttle(serialize_and_sign(response_shuttle_payload))
+        forward_response_shuttle(response_shuttle)
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
         return self.sign(serialized_payload)
 
-    def forward_request(request_shuttle):
+    def forward_request_shuttle(request_shuttle):
         if not self.is_tail:
             output('Replica {} : forwarding request to Replica: {}'.format(self.replica_id, self.replica_id + 1))
             send(request_shuttle, to=self.next_replica)
+
+    def forward_response_shuttle(response_shuttle):
+        if not self.is_head:
+            output('Replica {} : forwarding response to Replica: {}'.format(self.replica_id, self.replica_id - 1))
+            send(response_shuttle, to=self.prev_replica)
 
     def apply_operation(payload):
         operation = payload['operation']

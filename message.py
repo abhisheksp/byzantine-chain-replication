@@ -9,6 +9,7 @@ class Message:
     client_request = 'request'
     replica_response = 'response'
     request_shuttle_tag = 'request_shuttle'
+    response_shuttle_tag = 'response_shuttle'
     OrderStatement = namedtuple('OrderStatement', 'slot operation replica_id')
     OrderProof = namedtuple(
         'OrderProof',
@@ -20,6 +21,7 @@ class Message:
         'client_id request_id result operation configuration result_statements'
     )
     RequestShuttle = namedtuple('RequestShuttle', 'order_proof result_proof')
+    ResponseShuttle = namedtuple('ResponseShuttle', 'result result_proof')
 
     def __init__(self, identifier):
         self.identifier = identifier
@@ -37,6 +39,10 @@ class Message:
     def new_request_shuttle(self, payload):
         message_body = {'replica_id': self.identifier, 'payload': payload}
         return self.request_shuttle_tag, message_body
+
+    def new_response_shuttle(self, payload):
+        message_body = {'replica_id': self.identifier, 'payload': payload}
+        return self.response_shuttle_tag, message_body
 
     def new_order_statement(self, operation, slot):
         order_statement = {
