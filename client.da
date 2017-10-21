@@ -50,6 +50,17 @@ class Client(process):
             pass
         elif timeout(self.request_timeout):
             output('TimedOut, Issue Retransmission')
+            retransmit_request(request_id, operation)
+
+    def retransmit_request(old_request_id, operation):
+        output('Client: Retransmitting old request: ', old_request_id)
+        payload = serialize_and_sign(operation)
+        request = self.factory.new_retransmission_request(old_request_id, payload)
+        send(request, to=self.head)
+        if await(old_request_id not in self.pending_requests):
+            pass
+        elif timeout(self.request_timeout):
+            output('Retransmission Timed Out')
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)

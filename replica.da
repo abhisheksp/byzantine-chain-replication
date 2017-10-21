@@ -53,8 +53,8 @@ class Replica(process):
         is_verified, sender_replica_id, payload = verify_replica(payload)
         if is_verified:
             output('Replica {} : Received Result Shuttle from Replica: {}, Payload: {}'.format(self.replica_id,
-                                                                                                 sender_replica_id,
-                                                                                                 payload))
+                                                                                               sender_replica_id,
+                                                                                               payload))
             result_shuttle = parse_result_shuttle(payload)
             handle_result_shuttle(result_shuttle)
 
@@ -124,7 +124,7 @@ class Replica(process):
         client_id, request_id = result_proof.client_id, result_proof.request_id
         self.result_shuttle_cache[(client_id, request_id)] = result_shuttle
         result_shuttle_payload = {'result': result_shuttle.result,
-                                    'result_proof': result_shuttle.result_proof._asdict()}
+                                  'result_proof': result_shuttle.result_proof._asdict()}
         result_shuttle = self.factory.new_result_shuttle(serialize_and_sign(result_shuttle_payload))
         forward_result_shuttle(result_shuttle)
         # output_cache()
