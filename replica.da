@@ -1,7 +1,8 @@
 import pickle
 import nacl
-from slot import Slot
+
 from message import Message
+from slot import Slot
 
 
 class Replica(process):
@@ -111,11 +112,11 @@ class Replica(process):
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
         forward_request_shuttle(request_shuttle)
         if self.is_tail:
-            response_message = bytes(result, 'utf-8')
+            # response_message = bytes(result, 'utf-8')
             output('Replica {} : Sending Response to client'.format(self.replica_id))
-            respond_to_client(client_id, response_message)
-            response_shuttle_payload = {'result': result, 'result_proof': result_proof}
-            response_shuttle = self.factory.new_response_shuttle(serialize_and_sign(response_shuttle_payload))
+            response_shuttle_payload = serialize_and_sign({'result': result, 'result_proof': result_proof})
+            response_shuttle = self.factory.new_response_shuttle(response_shuttle_payload)
+            respond_to_client(client_id, response_shuttle_payload)
             forward_response_shuttle(response_shuttle)
         output_running_state()
 
@@ -156,7 +157,7 @@ class Replica(process):
             # TODO: handle unrecognized operation?
 
     def respond_to_client(client_id, response_shuttle):
-        response = self.factory.new_response(serialize_and_sign(response_shuttle))
+        response = self.factory.new_response(response_shuttle)
         client_process = self.client_processes[client_id]
         send(response, to=client_process)
         output("Replica {} : Responded to client with : {}".format(self.replica_id, response_shuttle))

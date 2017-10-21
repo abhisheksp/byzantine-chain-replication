@@ -1,7 +1,7 @@
-from message import Message
-import operation
-import nacl
 import pickle
+import nacl
+import operation
+from message import Message
 
 
 class Client(process):
@@ -14,6 +14,8 @@ class Client(process):
         self.olympus_vk = config['olympus_verifying_key']
         self.replica_vks = config['replica_vks']
         self.factory = Message(self.client_id)
+        self.request_timeout = (config['client_timeout'] / 1000)
+        self.pending_requests = set()
         output('Client setup finished...')
 
     def run():
@@ -32,22 +34,42 @@ class Client(process):
         is_verified, payload = verify_replica(payload)
         if is_verified:
             output("Received Replica Response, Payload:", payload)
+            result = payload['result']
+            result_proof = payload['result_proof']
+            request_id = result_proof['request_id']
+            self.pending_requests.remove(request_id)
+
+    def send_request(operation):
+        payload = serialize_and_sign(operation)
+        request = self.factory.new_request(payload)
+        request_id = request[1]['request_id']
+        self.pending_requests.add(request_id)
+        send(request, to=self.head)
+        output('request timeout', self.request_timeout)
+        if await(request_id not in self.pending_requests):
+            pass
+        elif timeout(self.request_timeout):
+            output('TimedOut, Issue Retransmission')
+
+    def serialize_and_sign(payload):
+        serialized_payload = pickle.dumps(payload)
+        return self.sign(serialized_payload)
 
     def verify_replica(payload):
         replica_id, signed_payload = payload['replica_id'], payload['payload']
         try:
             if replica_id in self.replica_vks:
-                message = str(self.replica_vks[replica_id].verify(signed_payload))
-                return True, message
+                serialized_payload = self.replica_vks[replica_id].verify(signed_payload)
+                deserialized_payload = pickle.loads(serialized_payload)
+                return True, deserialized_payload
             return False, None
         except nacl.exceptions.BadSignatureError:
             return False, None
 
     def demo_requests():
         output('Starting Put Demo')
-        put_operation = pickle.dumps(operation.new_put_operation('the first key', 'the first value'))
-        request = self.factory.new_request(self.sign(put_operation))
-        send(request, to=self.head)
+        put_operation = operation.new_put_operation('the first key', 'the first value')
+        send_request(put_operation)
 
         # output('Starting Get Demo')
         # get_operation = pickle.dumps(operation.new_get_operation('the first key'))
@@ -63,4 +85,3 @@ class Client(process):
         # slice_operation = pickle.dumps(operation.new_slice_operation('the first key', '0:14'))
         # request = self.factory.new_request(self.sign(slice_operation))
         # send(request, to=self.head)
-
