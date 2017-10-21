@@ -34,7 +34,7 @@ class Client(process):
             output("Received Replica Response, Payload:", payload)
 
     def verify_replica(payload):
-        replica_id, signed_payload = payload['id'], payload['payload']
+        replica_id, signed_payload = payload['replica_id'], payload['payload']
         try:
             if replica_id in self.replica_vks:
                 message = str(self.replica_vks[replica_id].verify(signed_payload))

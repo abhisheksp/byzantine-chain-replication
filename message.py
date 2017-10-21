@@ -29,11 +29,11 @@ class Message:
     def new_request(self, payload):
         request_id = uuid.uuid4()
         # TODO: make id explicit
-        message_body = {'id': self.identifier, 'request_id': request_id, 'payload': payload}
+        message_body = {'client_id': self.identifier, 'request_id': request_id, 'payload': payload}
         return self.client_request, message_body
 
     def new_response(self, payload):
-        message_body = {'id': self.identifier, 'payload': payload}  # TODO: make id explicit
+        message_body = {'replica_id': self.identifier, 'payload': payload}  # TODO: make id explicit
         return self.replica_response, message_body
 
     def new_request_shuttle(self, payload):

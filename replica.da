@@ -127,6 +127,7 @@ class Replica(process):
                                     'result_proof': response_shuttle.result_proof._asdict()}
         response_shuttle = self.factory.new_response_shuttle(serialize_and_sign(response_shuttle_payload))
         forward_response_shuttle(response_shuttle)
+        # output_cache()
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
@@ -154,14 +155,14 @@ class Replica(process):
             return self.running_state.slice(payload['key'], payload['slice'])
             # TODO: handle unrecognized operation?
 
-    def respond_to_client(client_id, response_message):
-        response = self.factory.new_response(self.sign(response_message))
+    def respond_to_client(client_id, response_shuttle):
+        response = self.factory.new_response(serialize_and_sign(response_shuttle))
         client_process = self.client_processes[client_id]
         send(response, to=client_process)
-        output("Replica {} : Responded to client with : {}".format(self.replica_id, response_message))
+        output("Replica {} : Responded to client with : {}".format(self.replica_id, response_shuttle))
 
     def verify_client(payload):
-        client_id, request_id, signed_payload = payload['id'], payload['request_id'], payload['payload']
+        client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
         try:
             if client_id in self.client_vks:
                 raw_message = self.client_vks[client_id].verify(signed_payload)
@@ -184,3 +185,8 @@ class Replica(process):
 
     def output_running_state():
         output('Replica {} : Running State: {}'.format(self.replica_id, self.running_state))
+
+    def output_cache():
+        formatter = lambda x: 'Client: {} Request: {} => Result: {}'.format(x[0][0], x[0][1], x[1])
+        message = '\n'.join(map(formatter, self.result_shuttle_cache.items()))
+        output('Replica {} : Cache: {}'.format(self.replica_id, message))
