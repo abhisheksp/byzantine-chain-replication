@@ -108,9 +108,10 @@ class Replica(process):
         # TODO: verify order_proof
         prev_order_proof, prev_result_proof = prev_req_shuttle.order_proof, prev_req_shuttle.result_proof
         is_verified = verify_order_proof(prev_order_proof)
-        if not is_verified:
+        next_slot = next(self.slot)
+        if not is_verified or prev_order_proof.slot != next_slot:
             output('Proof of Misbehaviour')
-            proof_of_misbehaviour = 'Proof of Misbehaviour'
+            proof_of_misbehaviour = 'Signature Verification Failed or Slot Hole found'
             send_reconfiguration_request(proof_of_misbehaviour)
             return
         client_id, operation = prev_order_proof.client_id, prev_order_proof.operation
@@ -205,7 +206,7 @@ class Replica(process):
             return False, None
 
     def verify_order_proof(order_proof):
-        slot = order_proof.slot
+        slot_number = order_proof.slot
         operation = order_proof.operation
         order_stmts = order_proof.order_statements
         prev_replica_count = self.replica_id - 1
@@ -213,7 +214,7 @@ class Replica(process):
         is_order_proof_verified = is_count_consistent
         for prev_replica_id, signed_order_stmt in enumerate(order_stmts):
             is_verified, order_stmt = verify_replica(prev_replica_id + 1, signed_order_stmt)
-            if not is_verified or slot != order_stmt['slot'] or operation != order_stmt['operation']:
+            if not is_verified or slot_number != order_stmt['slot'] or operation != order_stmt['operation']:
                 is_order_proof_verified = False
                 break
         return is_order_proof_verified
