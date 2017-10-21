@@ -1,6 +1,6 @@
 import pickle
 import nacl
-
+from slot import Slot
 from message import Message
 
 
@@ -17,6 +17,7 @@ class Replica(process):
         self.is_head = self.replica_id == 1  # TODO: extract constant
         self.is_tail = self.replica_id == self.config['replica_count']
         self.next_replica = None
+        self.slot = Slot()
 
     def run():
         output('Started Replica {}'.format(self.replica_id))
@@ -47,7 +48,7 @@ class Replica(process):
     def handle_client_request(client_id, request_id, operation):
         output('Replica {} : Received Client Request, Payload: {}'.format(self.replica_id,
                                                                           operation))
-        order_statement = self.factory.new_order_statement(operation)
+        order_statement = self.factory.new_order_statement(operation, next(self.slot))
         new_order_proof_details = {
             'client_id': client_id,
             'request_id': request_id,

@@ -38,8 +38,7 @@ class Message:
         message_body = {'replica_id': self.identifier, 'payload': payload}
         return self.request_shuttle_tag, message_body
 
-    def new_order_statement(self, operation, slot=None):
-        slot = slot if slot else uuid.uuid4()
+    def new_order_statement(self, operation, slot):
         order_statement = {
             'slot': slot,
             'operation': operation,
