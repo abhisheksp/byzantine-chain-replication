@@ -198,11 +198,11 @@ class Replica(process):
         slot = order_proof.slot
         operation = order_proof.operation
         order_stmts = order_proof.order_statements
-        is_order_proof_verified = True
+        prev_replica_count = self.replica_id - 1
+        is_count_consistent = prev_replica_count == len(order_stmts)
+        is_order_proof_verified = is_count_consistent
         for prev_replica_id, signed_order_stmt in enumerate(order_stmts):
-            # prev_replica_id += 1     # Indexing change
             is_verified, order_stmt = verify_replica(prev_replica_id + 1, signed_order_stmt)
-            output('verifying replica {}, is_verified: {}'.format(prev_replica_id + 1, is_verified))
             if not is_verified or slot != order_stmt['slot'] or operation != order_stmt['operation']:
                 is_order_proof_verified = False
                 break
