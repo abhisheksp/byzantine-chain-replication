@@ -16,6 +16,7 @@ class Replica(process):
         self.replica_processes = None
         self.is_head = self.replica_id == 1  # TODO: extract constant
         self.is_tail = self.replica_id == self.config['replica_count']
+        self.next_replica = None
 
     def run():
         output('Started Replica {}'.format(self.replica_id))
@@ -25,6 +26,7 @@ class Replica(process):
     def receive(msg=('new_configuration', payload)):
         output('Replica {} received other replica details'.format(self.replica_id))
         self.replica_processes = payload
+        self.next_replica = None if self.is_tail else self.replica_processes[self.replica_id + 1]
 
     def receive(msg=('request', payload)):
         if self.is_head:
@@ -102,10 +104,9 @@ class Replica(process):
         return self.sign(serialized_payload)
 
     def forward_request(request_shuttle):
-        next_replica_id = self.replica_id + 1
-        if self.replica_id + 1 <= len(self.replica_processes):
-            output('Replica {} : forwarding request to Replica: {}'.format(self.replica_id, next_replica_id))
-            send(request_shuttle, to=self.replica_processes[next_replica_id])
+        if not self.is_tail:
+            output('Replica {} : forwarding request to Replica: {}'.format(self.replica_id, self.replica_id + 1))
+            send(request_shuttle, to=self.next_replica)
 
     def apply_operation(payload):
         operation = payload['operation']
