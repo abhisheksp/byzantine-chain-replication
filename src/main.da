@@ -2,13 +2,12 @@ import getopt
 import random
 import string
 import sys
-
 import nacl.encoding
 import nacl.signing
 import os
-
 import operation
 import state
+from signature import Signature
 
 client = import_da('client')
 olympus = import_da('olympus')
@@ -113,17 +112,17 @@ def main():
     # Generate Workloads for clients
     configuration['client_workload'] = parse_client_workloads(configuration)
 
-    # Setup Keys
-    client_sks, client_vks = generate_keys(client_count)
-    configuration['client_sks'] = client_sks
-    configuration['client_vks'] = client_vks
     configuration['replica_count'] = 2 * configuration['t'] + 1
-    replica_sks, replica_vks = generate_keys(configuration['replica_count'])
+    replica_count = configuration['replica_count']
+
+    # Setup Keys
+    signature = Signature()
+    client_sks = signature.generate_client_keys(client_count)
+    configuration['client_sks'] = client_sks
+    replica_sks = signature.generate_replica_keys(replica_count)
     configuration['replica_sks'] = replica_sks
-    configuration['replica_vks'] = replica_vks
-    olympus_singing_key, olympus_verifying_key = olympus_key()
-    configuration['olympus_singing_key'] = olympus_singing_key
-    configuration['olympus_verifying_key'] = olympus_verifying_key
+    olympus_sk = signature.generate_olympus_keys()
+    configuration['olympus_singing_key'] = olympus_sk
 
     config(channel='reliable')
 
@@ -133,11 +132,11 @@ def main():
     client_processes = {}
     for client_id in range(1, client_count + 1):
         # TODO: isolate client configuration
-        client_process = new(client.Client, args=(client_id, configuration))
+        client_process = new(client.Client, args=(client_id, signature, configuration))
         client_processes[client_id] = client_process
 
     # Setup Olympus
-    olympus_process = new(olympus.Olympus, args=(client_processes, configuration))
+    olympus_process = new(olympus.Olympus, args=(client_processes, signature, configuration))
 
     # Start Processes
     start(set(client_processes.values()))

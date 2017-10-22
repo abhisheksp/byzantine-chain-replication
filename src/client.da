@@ -5,23 +5,20 @@ import nacl
 import nacl.encoding
 import nacl.exceptions
 import nacl.hash
-import util
 import operation as op
+import util
 from message import Message
 from state import State
 
 
 class Client(process):
-    def setup(client_id, config):
+    def setup(client_id, signature, config):
         self.head = None
         self.olympus = None
         self.replica_processes = None
         self.replica_processes_set = None
         signing_key = config['client_sks'][client_id]
         self.sign = lambda x: signing_key.sign(x)
-        self.verifying_key = config['client_vks'][client_id]
-        self.olympus_vk = config['olympus_verifying_key']
-        self.replica_vks = config['replica_vks']
         self.factory = Message(client_id)
         self.request_timeout = (config['client_timeout'] / 1000)
         self.pending_requests = set()
@@ -32,8 +29,8 @@ class Client(process):
         output('Client is up...')
         output('awaiting new configuration from Olympus')
         await(some(received(('new_configuration', _,))))
-        # demo_requests()
-        demo_forward_requests()
+        demo_requests()
+        # demo_forward_requests()
         await(False)
 
     def receive(msg=('new_configuration', payload)):
@@ -47,7 +44,7 @@ class Client(process):
 
     def receive(msg=('response', payload)):
         replica_id, signed_payload = payload['replica_id'], payload['payload']
-        is_verified, payload = verify_replica(replica_id, signed_payload)
+        is_verified, payload = self.signature.verify_replica(replica_id, signed_payload)
         if is_verified:
             output(
                 'Client: {}, Received Response from Replica: {}, Payload:'.format(self.client_id, replica_id, payload))
@@ -94,22 +91,12 @@ class Client(process):
         serialized_payload = pickle.dumps(payload)
         return self.sign(serialized_payload)
 
-    def verify_replica(replica_id, signed_payload):
-        try:
-            if replica_id in self.replica_vks:
-                serialized_payload = self.replica_vks[replica_id].verify(signed_payload)
-                deserialized_payload = pickle.loads(serialized_payload)
-                return True, deserialized_payload
-            return False, None
-        except nacl.exceptions.BadSignatureError:
-            return False, None
-
     def verify_result_proof(result, result_proof):
         def verify_result_statements_sign(signed_result_statements):
             result_statements = []
             for i, signed_result_statement in enumerate(signed_result_statements):
                 replica_id = i + 1
-                is_verified, result_statement = verify_replica(replica_id, signed_result_statement)
+                is_verified, result_statement = self.signature.verify_replica(replica_id, signed_result_statement)
                 if not is_verified:
                     return False, None
                 result_statements.append(result_statement)
@@ -149,6 +136,7 @@ class Client(process):
                 return state.slice(payload['key'], payload['slice'])
                 # TODO: handle unrecognized operation?
 
+        output('Starting Client Workload')
         verification_running_state = State()
         client_workloads = config['client_workload'][self.client_id]
         for operation in client_workloads:
@@ -170,4 +158,3 @@ class Client(process):
         elif timeout(self.request_timeout):
             output('TimedOut, Issue Retransmission')
             retransmit_request(request_id, operation)
-

@@ -2,20 +2,19 @@ replica = import_da('replica')
 
 
 class Olympus(process):
-    def setup(client_processes, config):
+    def setup(client_processes, signature, config):
         self.signing_key = config['olympus_singing_key']
-        self.verifying_key = config['olympus_verifying_key']
+        # self.verifying_key = config['olympus_verifying_key']
         self.replica_count = config['replica_count']
         output('Olympus setup finished...')
 
     def run():
-        replica_processes = {}  # TODO: use sets to use better DistAlgo features
+        replica_processes = {}
         for replica_id in range(1, self.replica_count + 1):
-            replica_process = new(replica.Replica, args=(self.client_processes, replica_id, config))
+            replica_process = new(replica.Replica, args=(self.client_processes, replica_id, self.signature, config))
             replica_processes[replica_id] = replica_process
             start(replica_process)
 
-        # TODO: extend to multiple replicas
         client_processes_set = set(self.client_processes.values())
         replica_processes_set = set(replica_processes.values())
         payload = {'olympus': self, 'replicas': replica_processes}

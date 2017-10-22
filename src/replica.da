@@ -1,23 +1,19 @@
 import pickle
 
-import nacl
 import util
+from constants import Mode
 from message import Message
 from slot import Slot
-from constants import Mode
 
 
 class Replica(process):
-    def setup(client_processes, replica_id, config):
+    def setup(client_processes, replica_id, signature, config):
         self.mode = Mode.ACTIVE
         self.history = []
         # TODO: type
         self.type = None
         self.running_state = config['initial_running_state']
         signing_key = config['replica_sks'][self.replica_id]
-        self.verifying_key = config['replica_vks'][self.replica_id]  # TODO: required?
-        self.replica_vks = config['replica_vks']
-        self.client_vks = config['client_vks']
         self.factory = Message(self.replica_id)
         self.sign = lambda x: signing_key.sign(x)
         self.replica_processes = None
@@ -48,16 +44,19 @@ class Replica(process):
 
     def receive(msg=('request', payload)):
         if self.is_head:
-            is_verified, client_id, request_id, operation = verify_client(payload)
+            client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
+            is_verified, operation = self.signature.verify_client(client_id, signed_payload)
             if is_verified:
                 output('Replica {} : Received Client {} Request, Payload: {}'.format(self.replica_id, client_id,
                                                                                      operation))
                 handle_new_request(client_id, request_id, operation)
+            else:
+                output('Replica {} : Not Verified Client {} Request'.format(self.replica_id, client_id))
 
     def receive(msg=('forward_request', payload)):
         if self.is_head:
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
-            is_verified, payload = verify_replica(sender_replica_id, signed_payload)
+            is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
             if is_verified:
                 client_id, request_id = payload['client_id'], payload['request_id']
                 output('Replica {} : Received Forward Request from Replica {}, Client: {} RequestID: {}'.format(
@@ -72,7 +71,7 @@ class Replica(process):
         if not self.is_head:
             # TODO: sender_replica_id required?
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
-            is_verified, payload = verify_replica(sender_replica_id, signed_payload)
+            is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
             if is_verified:
                 output('Replica {} : Received Request Shuttle from Replica {}, Payload: {}'.format(
                     self.replica_id, sender_replica_id, payload))
@@ -80,7 +79,8 @@ class Replica(process):
                 handle_request_shuttle(prev_req_shuttle)
 
     def receive(msg=('retransmission', payload)):
-        is_verified, client_id, request_id, operation = verify_client(payload)
+        client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
+        is_verified, operation = self.signature.verify_client(client_id, signed_payload)
         if is_verified:
             output('Replica {} : Received Client: {} Retransmission Request, Payload: {}'.format(self.replica_id,
                                                                                                  client_id, operation))
@@ -93,7 +93,7 @@ class Replica(process):
 
     def receive(msg=('result_shuttle', payload)):
         sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
-        is_verified, payload = verify_replica(sender_replica_id, signed_payload)
+        is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
         if is_verified:
             output('Replica {} : Received Result Shuttle from Replica: {}, Payload: {}'.format(self.replica_id,
                                                                                                sender_replica_id,
@@ -271,27 +271,6 @@ class Replica(process):
         send(response, to=client_process)
         output("Replica {} : Responded to client with : {}".format(self.replica_id, result_shuttle))
 
-    def verify_client(payload):
-        client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
-        try:
-            if client_id in self.client_vks:
-                raw_message = self.client_vks[client_id].verify(signed_payload)
-                unsigned_payload = pickle.loads(raw_message)
-                return True, client_id, request_id, unsigned_payload  # TODO: fix naming inconsistency
-            return False, None, None
-        except nacl.exceptions.BadSignatureError:
-            return False, None, None
-
-    def verify_replica(sender_replica_id, signed_payload):
-        try:
-            if sender_replica_id in self.replica_vks:
-                serialized_payload = self.replica_vks[sender_replica_id].verify(signed_payload)
-                deserialized_payload = pickle.loads(serialized_payload)
-                return True, deserialized_payload
-            return False, None
-        except nacl.exceptions.BadSignatureError:
-            return False, None
-
     def verify_order_proof(order_proof):
         slot_number = order_proof.slot
         operation = order_proof.operation
@@ -300,7 +279,7 @@ class Replica(process):
         is_count_consistent = prev_replica_count == len(order_stmts)
         is_order_proof_verified = is_count_consistent
         for prev_replica_id, signed_order_stmt in enumerate(order_stmts):
-            is_verified, order_stmt = verify_replica(prev_replica_id + 1, signed_order_stmt)
+            is_verified, order_stmt = self.signature.verify_replica(prev_replica_id + 1, signed_order_stmt)
             if not is_verified or slot_number != order_stmt['slot'] or operation != order_stmt['operation']:
                 is_order_proof_verified = False
                 break
