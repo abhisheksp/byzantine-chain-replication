@@ -1,8 +1,11 @@
+import collections
 import pickle
 
 import nacl
+import nacl.encoding
+import nacl.exceptions
+import nacl.hash
 import util
-
 from message import Message
 from state import State
 
@@ -38,21 +41,30 @@ class Client(process):
         self.head = self.replica_processes[1]
 
     def receive(msg=('response', payload)):
-        output('received response from replica')
-        is_verified, payload = verify_replica(payload)
+        is_verified, replica_id, payload = verify_replica(payload)
         if is_verified:
-            result = payload['result']
+            output(
+                'Client: {}, Received Response from Replica: {}, Payload:'.format(self.client_id, replica_id, payload))
             result_proof = payload['result_proof']
             request_id = result_proof['request_id']
             if request_id in self.pending_requests:
                 output("Received Replica Response, Payload:", payload)
+                handle_response(payload)
                 self.pending_requests.remove(request_id)
             else:
                 output("Dropping Duplicate Replica Response, Payload:", payload)
 
+    def handle_response(payload):
+        result, result_proof = payload['result'], payload['result_proof']
+        is_verified = verify_result_proof(result, result_proof)
+        if is_verified:
+            output('Client {}: Response Accepted, Request ID: {}'.format(self.client_id, result_proof['request_id']))
+        else:
+            output('Client {}: Response Rejecting, Proof of Misbehaviour'.format(self.client_id))
+
     def send_request(operation):
-        payload = serialize_and_sign(operation)
-        request = self.factory.new_request(payload)
+        serialized_payload = serialize_and_sign(operation)
+        request = self.factory.new_request(serialized_payload)
         request_id = request[1]['request_id']
         self.pending_requests.add(request_id)
         send(request, to=self.head)
@@ -77,18 +89,26 @@ class Client(process):
         return self.sign(serialized_payload)
 
     def verify_replica(payload):
+        # TODO: remove duplication
         replica_id, signed_payload = payload['replica_id'], payload['payload']
         try:
             if replica_id in self.replica_vks:
                 serialized_payload = self.replica_vks[replica_id].verify(signed_payload)
                 deserialized_payload = pickle.loads(serialized_payload)
-                return True, deserialized_payload
-            return False, None
+                return True, replica_id, deserialized_payload
+            return False, None, None
         except nacl.exceptions.BadSignatureError:
-            return False, None
+            return False, None, None
 
-            # FOR DEMO PURPOSES
+    def verify_result_proof(result, result_proof):
+        # def result_hash(r):
+        #     return nacl.hash.sha256(bytes(r, 'utf-8'), encoder=nacl.encoding.HexEncoder)
+        # hashed_result = result_hash(result)
+        # result_statements = result_proof['result_statements']
+        # counter = collections.Counter()
+        return True
 
+    # FOR DEMO PURPOSES
     def demo_requests():
         def apply_operation(state, payload):
             operation = payload['operation']
@@ -102,7 +122,6 @@ class Client(process):
                 return state.slice(payload['key'], payload['slice'])
                 # TODO: handle unrecognized operation?
 
-        output('Client {}: Executing Workload'.format(self.client_id))
         verification_running_state = State()
         client_workloads = config['client_workload'][self.client_id]
         for op in client_workloads:

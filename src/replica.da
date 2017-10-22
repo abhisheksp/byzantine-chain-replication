@@ -105,9 +105,9 @@ class Replica(process):
         outfile = 'replica_state_{}.json'.format(self.replica_id)
         util.persist_state(self.running_state.value, outfile)
 
+    # TODO: check if serialized result can be cached directly
     def handle_retransmission_request(client_id, request_id, operation):
         output('Replica {} : Retransmission Request, RID:{}, Client: {}'.format(self.replica_id, request_id, client_id))
-        output_cache()
         if (client_id, request_id) in self.result_shuttle_cache:
             output('Replica {} : Request: {} already processed'.format(self.replica_id, request_id))
             result_shuttle = self.result_shuttle_cache[(client_id, request_id)]
@@ -165,7 +165,6 @@ class Replica(process):
                                   'result_proof': result_shuttle.result_proof._asdict()}
         result_shuttle = self.factory.new_result_shuttle(serialize_and_sign(result_shuttle_payload))
         forward_result_shuttle(result_shuttle)
-        output_cache()
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
