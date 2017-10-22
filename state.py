@@ -1,4 +1,5 @@
 class State:
+    # TODO: JSON encoder
     def __init__(self, value=None):
         self.value = value or {}
 

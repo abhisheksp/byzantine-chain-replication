@@ -102,7 +102,7 @@ def main():
     configuration = read_configuration(config_file)
     client_count = configuration['num_client']
 
-    configuration['initial_running_state'] = state.State({'key': 'value'})
+    configuration['initial_running_state'] = state.State()
 
     # Generate Workloads for clients
     configuration['client_workload'] = parse_client_workloads(configuration)

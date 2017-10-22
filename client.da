@@ -1,6 +1,9 @@
 import pickle
 import nacl
 import operation
+import json
+import util
+from state import State
 from message import Message
 
 
@@ -76,27 +79,26 @@ class Client(process):
         except nacl.exceptions.BadSignatureError:
             return False, None
 
+            # FOR DEMO PURPOSES
+
     def demo_requests():
+        def apply_operation(state, payload):
+            operation = payload['operation']
+            if operation == 'put':
+                return state.put(payload['key'], payload['val'])
+            elif operation == 'get':
+                return state.get(payload['key'])
+            elif operation == 'append':
+                return state.append(payload['key'], payload['val'])
+            elif operation == 'slice':
+                return state.slice(payload['key'], payload['slice'])
+                # TODO: handle unrecognized operation?
+
         output('Client {}: Executing Workload'.format(self.client_id))
+        verification_running_state = State()
         client_workloads = config['client_workload'][self.client_id]
         for op in client_workloads:
+            apply_operation(verification_running_state, op)
             send_request(op)
-
-        # output('Starting Put Demo')
-        # put_operation = operation.new_put_operation('the first key', 'the first value')
-        # send_request(put_operation)
-
-        # output('Starting Get Demo')
-        # get_operation = pickle.dumps(operation.new_get_operation('the first key'))
-        # request = self.factory.new_request(self.sign(get_operation))
-        # send(request, to=self.head)
-        #
-        # output('Starting Append Demo')
-        # append_operation = pickle.dumps(operation.new_append_operation('the first key', '!!'))
-        # request = self.factory.new_request(self.sign(append_operation))
-        # send(request, to=self.head)
-        #
-        # output('Starting Slice Demo')
-        # slice_operation = pickle.dumps(operation.new_slice_operation('the first key', '0:14'))
-        # request = self.factory.new_request(self.sign(slice_operation))
-        # send(request, to=self.head)
+        outfile = 'client_state_{}.json'.format(self.client_id)
+        util.persist_state(verification_running_state.value, outfile)

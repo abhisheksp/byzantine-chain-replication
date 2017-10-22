@@ -1,6 +1,7 @@
 import pickle
 import nacl
-
+import json
+import util
 from message import Message
 from slot import Slot
 
@@ -140,7 +141,10 @@ class Replica(process):
                                   'result_proof': result_shuttle.result_proof._asdict()}
         result_shuttle = self.factory.new_result_shuttle(serialize_and_sign(result_shuttle_payload))
         forward_result_shuttle(result_shuttle)
-        # output_cache()
+
+        # FOR DEMO PURPOSE
+        outfile = 'replica_state_{}.json'.format(self.replica_id)
+        util.persist_state(self.running_state.value, outfile)
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
