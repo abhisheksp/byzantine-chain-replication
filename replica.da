@@ -195,14 +195,11 @@ class Replica(process):
     def verify_replica(sender_replica_id, signed_payload):
         try:
             if sender_replica_id in self.replica_vks:
-                output('verifying replica: ', sender_replica_id)
-                raw_message = self.replica_vks[sender_replica_id].verify(signed_payload)
-                unsigned_payload = pickle.loads(raw_message)
-                return True, unsigned_payload  # TODO: fix naming inconsistency
-            output('Replica {} not in Replica VKs'.format(sender_replica_id))
+                serialized_payload = self.replica_vks[sender_replica_id].verify(signed_payload)
+                deserialized_payload = pickle.loads(serialized_payload)
+                return True, deserialized_payload
             return False, None
         except nacl.exceptions.BadSignatureError:
-            output('Bad signature for replica:', sender_replica_id)
             return False, None
 
     def verify_order_proof(order_proof):
