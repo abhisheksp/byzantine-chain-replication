@@ -11,6 +11,8 @@ class Client(process):
     def setup(client_id, config):
         self.head = None
         self.olympus = None
+        self.replica_processes = None
+        self.replica_processes_set = None
         signing_key = config['client_sks'][client_id]
         self.sign = lambda x: signing_key.sign(x)
         self.verifying_key = config['client_vks'][client_id]
@@ -30,7 +32,10 @@ class Client(process):
 
     def receive(msg=('new_configuration', payload)):
         output('received new configuration from Olympus')
-        self.olympus, self.head = payload['olympus'], payload['head']
+        self.olympus = payload['olympus']
+        self.replica_processes = payload['replicas']
+        self.replica_processes_set = set(self.replica_processes.values())
+        self.head = self.replica_processes[1]
 
     def receive(msg=('response', payload)):
         output('received response from replica')
