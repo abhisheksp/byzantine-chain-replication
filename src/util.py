@@ -1,12 +1,11 @@
-import json
-
-import os
-
-
-def persist_state(state, outfile):
-    # TODO: refactor
-    parent_dir = os.path.abspath(os.pardir)
-    logs_dir = 'logs'
-    full_path = os.path.join(parent_dir, logs_dir, outfile)
-    with open(full_path, 'w+') as json_file:
-        json.dump(state, json_file)
+def read_configuration(filepath):
+    config = {}
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line[0] != '#':
+                (key, sep, val) = line.partition('=')
+                # if the line does not contain '=', it is invalid and hence ignored
+                if len(sep) != 0:
+                    val = val.strip()
+                    config[key.strip()] = int(val) if str.isdecimal(val) else val
+    return config

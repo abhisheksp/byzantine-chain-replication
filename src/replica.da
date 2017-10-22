@@ -1,6 +1,6 @@
 import pickle
 
-import util
+import testutil
 from constants import Mode
 from message import Message
 from slot import Slot
@@ -137,7 +137,7 @@ class Replica(process):
         output_running_state()
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
-        util.persist_state(self.running_state.value, outfile)
+        testutil.persist_state(self.running_state.value, outfile)
 
     # TODO: check if serialized result can be cached directly
     def handle_retransmission_request(client_id, request_id, operation):
@@ -216,7 +216,7 @@ class Replica(process):
         output_running_state()
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
-        util.persist_state(self.running_state.value, outfile)
+        testutil.persist_state(self.running_state.value, outfile)
 
     def handle_result_shuttle(result_shuttle):
         result_proof = result_shuttle.result_proof

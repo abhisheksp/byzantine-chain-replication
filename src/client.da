@@ -6,7 +6,7 @@ import nacl.encoding
 import nacl.exceptions
 import nacl.hash
 import operation as op
-import util
+import testutil
 from message import Message
 from state import State
 
@@ -143,7 +143,7 @@ class Client(process):
             apply_operation(verification_running_state, operation)
             send_request(operation)
         outfile = 'client_state_{}.json'.format(self.client_id)
-        util.persist_state(verification_running_state.value, outfile)
+        testutil.persist_state(verification_running_state.value, outfile)
 
     def demo_forward_requests():
         operation = op.new_put_operation('movie', 'inception')
