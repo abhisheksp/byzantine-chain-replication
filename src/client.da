@@ -6,6 +6,7 @@ import nacl.encoding
 import nacl.exceptions
 import nacl.hash
 import util
+import operation as op
 from message import Message
 from state import State
 
@@ -31,7 +32,8 @@ class Client(process):
         output('Client is up...')
         output('awaiting new configuration from Olympus')
         await(some(received(('new_configuration', _,))))
-        demo_requests()
+        # demo_requests()
+        demo_forward_requests()
         await(False)
 
     def receive(msg=('new_configuration', payload)):
@@ -149,8 +151,23 @@ class Client(process):
 
         verification_running_state = State()
         client_workloads = config['client_workload'][self.client_id]
-        for op in client_workloads:
-            apply_operation(verification_running_state, op)
-            send_request(op)
+        for operation in client_workloads:
+            apply_operation(verification_running_state, operation)
+            send_request(operation)
         outfile = 'client_state_{}.json'.format(self.client_id)
         util.persist_state(verification_running_state.value, outfile)
+
+    def demo_forward_requests():
+        operation = op.new_put_operation('movie', 'inception')
+        non_head_replica = self.replica_processes[2]
+        serialized_payload = serialize_and_sign(operation)
+        request = self.factory.new_request(serialized_payload)
+        request_id = request[1]['request_id']
+        self.pending_requests.add(request_id)
+        send(request, to=non_head_replica)
+        if await(request_id not in self.pending_requests):
+            pass
+        elif timeout(self.request_timeout):
+            output('TimedOut, Issue Retransmission')
+            retransmit_request(request_id, operation)
+

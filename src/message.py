@@ -11,6 +11,7 @@ class Message:
     client_retransmission_tag = 'retransmission'
     replica_response_tag = 'response'
     replica_error_response_tag = 'error'
+    replica_forward_request_tag = 'forward_request'
     reconfiguration_tag = 'reconfiguration_request'
     request_shuttle_tag = 'request_shuttle'
     result_shuttle_tag = 'result_shuttle'
@@ -42,6 +43,10 @@ class Message:
     def new_reconfiguration_request(self, type_, payload):
         message_body = {'id': self.identifier, 'type': type_, 'payload': payload}
         return self.reconfiguration_tag, message_body
+
+    def new_forward_request(self, payload):
+        message_body = {'replica_id': self.identifier, 'payload': payload}
+        return self.replica_forward_request_tag, message_body
 
     def new_response(self, payload):
         message_body = {'replica_id': self.identifier, 'payload': payload}

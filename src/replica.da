@@ -23,6 +23,7 @@ class Replica(process):
         self.replica_processes = None
         self.is_head = self.replica_id == 1  # TODO: extract constant
         self.is_tail = self.replica_id == self.config['replica_count']
+        self.head = None
         self.next_replica = None
         self.prev_replica = None
         self.slot = Slot()
@@ -38,7 +39,10 @@ class Replica(process):
 
     def receive(msg=('new_configuration', payload)):
         output('Replica {} Received New Configuration from Olympus'.format(self.replica_id))
-        self.olympus, self.replica_processes = payload['olympus'], payload['replicas']
+        self.olympus = payload['olympus']
+        self.replica_processes = payload['replicas']
+        # TODO: Extract Head Tail constant
+        self.head = self.replica_processes[1]
         self.next_replica = None if self.is_tail else self.replica_processes[self.replica_id + 1]
         self.prev_replica = None if self.is_head else self.replica_processes[self.replica_id - 1]
 
@@ -46,7 +50,23 @@ class Replica(process):
         if self.is_head:
             is_verified, client_id, request_id, operation = verify_client(payload)
             if is_verified:
-                handle_client_request(client_id, request_id, operation)
+                output('Replica {} : Received Client {} Request, Payload: {}'.format(self.replica_id, client_id,
+                                                                                     operation))
+                handle_new_request(client_id, request_id, operation)
+
+    def receive(msg=('forward_request', payload)):
+        if self.is_head:
+            sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
+            is_verified, payload = verify_replica(sender_replica_id, signed_payload)
+            if is_verified:
+                client_id, request_id = payload['client_id'], payload['request_id']
+                output('Replica {} : Received Forward Request from Replica {}, Client: {} RequestID: {}'.format(
+                    self.replica_id, sender_replica_id, client_id, request_id))
+                operation = payload['operation']
+                if (client_id, request_id) in self.result_shuttle_cache:
+                    handle_recognized_request(client_id, request_id)
+                else:
+                    handle_new_request(client_id, request_id, operation)
 
     def receive(msg=('request_shuttle', payload)):
         if not self.is_head:
@@ -81,8 +101,7 @@ class Replica(process):
             result_shuttle = parse_result_shuttle(payload)
             handle_result_shuttle(result_shuttle)
 
-    def handle_client_request(client_id, request_id, operation):
-        output('Replica {} : Received Client Request, Payload: {}'.format(self.replica_id, operation))
+    def handle_new_request(client_id, request_id, operation):
         next_slot = next(self.slot)
         order_statement = self.factory.new_order_statement(operation, next_slot)
         signed_order_statement = serialize_and_sign(order_statement)
@@ -146,10 +165,11 @@ class Replica(process):
     def handle_unrecognized_request(client_id, request_id, operation):
         if self.is_head:
             # Case: New Request
-            handle_client_request(client_id, request_id, operation)
+            handle_new_request(client_id, request_id, operation)
         else:
-            # TODO: FORWARD REQUEST
-            pass
+            forward_request_payload = {'client_id': client_id, 'request_id': request_id, 'operation': operation}
+            forward_request = self.factory.new_forward_request(serialize_and_sign(forward_request_payload))
+            forward_to_head(forward_request)
 
     # TODO: move to message
     def parse_request_shuttle(payload):
@@ -221,6 +241,10 @@ class Replica(process):
         if not self.is_head:
             output('Replica {} : forwarding Result Shuttle to Replica: {}'.format(self.replica_id, self.replica_id - 1))
             send(result_shuttle, to=self.prev_replica)
+
+    def forward_to_head(forward_request):
+        output('Replica {} : Sending Forward Request to Head'.format(self.replica_id))
+        send(forward_request, to=self.head)
 
     def send_reconfiguration_request(proof_of_misbehaviour):
         output('Replica {} : Raising Reconfiguration Request'.format(self.replica_id))
