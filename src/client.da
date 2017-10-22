@@ -24,6 +24,7 @@ class Client(process):
         self.factory = Message(client_id)
         self.request_timeout = (config['client_timeout'] / 1000)
         self.pending_requests = set()
+        self.majority_replica_count = None
         output('Client setup finished...')
 
     def run():
@@ -39,9 +40,12 @@ class Client(process):
         self.replica_processes = payload['replicas']
         self.replica_processes_set = set(self.replica_processes.values())
         self.head = self.replica_processes[1]
+        replica_count = len(self.replica_processes_set)
+        self.majority_replica_count = (replica_count // 2) + 1
 
     def receive(msg=('response', payload)):
-        is_verified, replica_id, payload = verify_replica(payload)
+        replica_id, signed_payload = payload['replica_id'], payload['payload']
+        is_verified, payload = verify_replica(replica_id, signed_payload)
         if is_verified:
             output(
                 'Client: {}, Received Response from Replica: {}, Payload:'.format(self.client_id, replica_id, payload))
@@ -88,25 +92,46 @@ class Client(process):
         serialized_payload = pickle.dumps(payload)
         return self.sign(serialized_payload)
 
-    def verify_replica(payload):
-        # TODO: remove duplication
-        replica_id, signed_payload = payload['replica_id'], payload['payload']
+    def verify_replica(replica_id, signed_payload):
         try:
             if replica_id in self.replica_vks:
                 serialized_payload = self.replica_vks[replica_id].verify(signed_payload)
                 deserialized_payload = pickle.loads(serialized_payload)
-                return True, replica_id, deserialized_payload
-            return False, None, None
+                return True, deserialized_payload
+            return False, None
         except nacl.exceptions.BadSignatureError:
-            return False, None, None
+            return False, None
 
     def verify_result_proof(result, result_proof):
-        # def result_hash(r):
-        #     return nacl.hash.sha256(bytes(r, 'utf-8'), encoder=nacl.encoding.HexEncoder)
-        # hashed_result = result_hash(result)
-        # result_statements = result_proof['result_statements']
-        # counter = collections.Counter()
-        return True
+        def verify_result_statements_sign(signed_result_statements):
+            result_statements = []
+            for i, signed_result_statement in enumerate(signed_result_statements):
+                replica_id = i + 1
+                is_verified, result_statement = verify_replica(replica_id, signed_result_statement)
+                if not is_verified:
+                    return False, None
+                result_statements.append(result_statement)
+            return True, result_statements
+
+        def find_majority(result_hashes):
+            counter = collections.Counter(result_hashes)
+            majority_hash = None
+            found_majority_count = 0
+            for h, count in counter.items():
+                if count > found_majority_count:
+                    found_majority_count = count
+                    majority_hash = h
+            return majority_hash, found_majority_count
+
+        result_hash = nacl.hash.sha256(bytes(result, 'utf-8'), encoder=nacl.encoding.HexEncoder)
+        is_verified, result_statements = verify_result_statements_sign(result_proof['result_statements'])
+        if not is_verified:
+            return False
+        result_hashes = list(map(lambda r: r['result'], result_statements))
+        majority_hash, found_majority_count = find_majority(result_hashes)
+        required_majority_count = self.majority_replica_count
+        is_required_majority = found_majority_count >= required_majority_count
+        return is_required_majority and result_hash == majority_hash
 
     # FOR DEMO PURPOSES
     def demo_requests():
