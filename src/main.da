@@ -47,12 +47,13 @@ def main():
     # Setup Clients
     client_processes = {}
     for client_id in range(1, client_count + 1):
-        client_process = new(client.Client, args=(client_id, signature, configuration))
-        client_processes[client_id] = client_process
+        client_process = new(client.Client, args=(client_id, signature, configuration), at='ClientNode')
+        client_processes[client_id] = client_process.pop()
 
     # Setup Olympus
     olympus_process = new(olympus.Olympus, args=(client_processes, signature, configuration))
 
     # Start Processes
-    start(set(client_processes.values()))
+    client_processes_set = set(client_processes.values())
+    start(client_processes_set)
     start(olympus_process)
