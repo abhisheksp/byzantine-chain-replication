@@ -28,6 +28,8 @@ class Replica(process):
         self.slot = Slot()
         self.result_shuttle_cache = {}
         self.olympus = None
+        self.head_timeout = config['head_timeout']
+        self.non_head_timeout = config['nonhead_timeout']
 
     def run():
         output('Started Replica {}'.format(self.replica_id))
@@ -110,6 +112,7 @@ class Replica(process):
         result_proof = self.factory.new_result_proof(empty_result_proof, signed_result_statement)
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
+        self.result_shuttle_cache[(client_id, request_id)] = None
         self.history.append(order_proof)
         forward_request_shuttle(request_shuttle)
         output_running_state()
@@ -121,11 +124,32 @@ class Replica(process):
     def handle_retransmission_request(client_id, request_id, operation):
         output('Replica {} : Retransmission Request, RID:{}, Client: {}'.format(self.replica_id, request_id, client_id))
         if (client_id, request_id) in self.result_shuttle_cache:
-            output('Replica {} : Request: {} already processed'.format(self.replica_id, request_id))
-            result_shuttle = self.result_shuttle_cache[(client_id, request_id)]
-            result_shuttle_payload = serialize_and_sign({'result': result_shuttle.result,
-                                                         'result_proof': result_shuttle.result_proof._asdict()})
-            respond_to_client(client_id, result_shuttle_payload)
+            handle_recognized_request(client_id, request_id)
+        else:
+            handle_unrecognized_request(client_id, request_id, operation)
+
+    def handle_recognized_request(client_id, request_id):
+        req_timeout = self.head_timeout if self.is_head else self.non_head_timeout
+        # TODO: add these to state
+        if await(self.result_shuttle_cache[(client_id, request_id)] is not None):
+            pass
+        elif timeout(req_timeout):
+            self.mode = Mode.IMMUTABLE
+            proof_of_misbehaviour = 'Recognized Request Timed Out'
+            send_reconfiguration_request(proof_of_misbehaviour)
+            return
+        result_shuttle = self.result_shuttle_cache[(client_id, request_id)]
+        result_shuttle_payload = serialize_and_sign({'result': result_shuttle.result,
+                                                     'result_proof': result_shuttle.result_proof._asdict()})
+        respond_to_client(client_id, result_shuttle_payload)
+
+    def handle_unrecognized_request(client_id, request_id, operation):
+        if self.is_head:
+            # Case: New Request
+            handle_client_request(client_id, request_id, operation)
+        else:
+            # TODO: FORWARD REQUEST
+            pass
 
     # TODO: move to message
     def parse_request_shuttle(payload):
@@ -149,7 +173,8 @@ class Replica(process):
             self.mode = Mode.IMMUTABLE
             send_reconfiguration_request(proof_of_misbehaviour)
             return
-        client_id, operation = prev_order_proof.client_id, prev_order_proof.operation
+        client_id, request_id = prev_order_proof.client_id, prev_order_proof.request_id
+        operation = prev_order_proof.operation
         order_statement = self.factory.new_order_statement(prev_order_proof.operation, prev_order_proof.slot)
         signed_order_statement = serialize_and_sign(order_statement)
         order_proof = self.factory.new_order_proof(prev_order_proof, signed_order_statement)
@@ -159,6 +184,7 @@ class Replica(process):
         result_proof = self.factory.new_result_proof(prev_result_proof, signed_result_statement)
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
+        self.result_shuttle_cache[(client_id, request_id)] = None
         self.history.append(order_proof)
         forward_request_shuttle(request_shuttle)
         if self.is_tail:
