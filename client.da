@@ -77,9 +77,14 @@ class Client(process):
             return False, None
 
     def demo_requests():
-        output('Starting Put Demo')
-        put_operation = operation.new_put_operation('the first key', 'the first value')
-        send_request(put_operation)
+        output('Client {}: Executing Workload'.format(self.client_id))
+        client_workloads = config['client_workload'][self.client_id]
+        for op in client_workloads:
+            send_request(op)
+
+        # output('Starting Put Demo')
+        # put_operation = operation.new_put_operation('the first key', 'the first value')
+        # send_request(put_operation)
 
         # output('Starting Get Demo')
         # get_operation = pickle.dumps(operation.new_get_operation('the first key'))

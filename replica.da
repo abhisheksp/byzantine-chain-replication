@@ -153,7 +153,7 @@ class Replica(process):
 
     def forward_result_shuttle(result_shuttle):
         if not self.is_head:
-            output('Replica {} : forwarding response to Replica: {}'.format(self.replica_id, self.replica_id - 1))
+            output('Replica {} : forwarding Result Shuttle to Replica: {}'.format(self.replica_id, self.replica_id - 1))
             send(result_shuttle, to=self.prev_replica)
 
     def send_reconfiguration_request(proof_of_misbehaviour):

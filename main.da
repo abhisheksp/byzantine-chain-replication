@@ -1,10 +1,11 @@
 import random
 import string
-
 import state
 import nacl.encoding
 import nacl.signing
 import operation
+import sys
+import getopt
 
 client = import_da('client')
 olympus = import_da('olympus')
@@ -59,9 +60,9 @@ def parse_client_workloads(config):
         previous_keys = []
         for _ in range(count):
             op = random.randint(1, 4)
-            N = random.randint(0, 100)
-            rand_key = ''.join(random.choices(string.ascii_letters + string.digits, k=N))
-            rand_value = ''.join(random.choices(string.ascii_letters + string.digits, k=N))
+            length = random.randint(0, 100)
+            rand_key = ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+            rand_value = ''.join(random.choices(string.ascii_letters + string.digits, k=length))
             previous_keys.append(rand_key)
             rand_prev_key = random.choice(previous_keys)
             rand_slice = str(random.randint(0, 10)) + ':' + str(random.randint(0, 10))
@@ -78,7 +79,7 @@ def parse_client_workloads(config):
     client_workload = {}
     for k, v in config.items():
         if k.startswith('workload'):
-            client_id = int(k[k.find('[') + 1])
+            client_id = int(k[k.find('[') + 1]) + 1
             if not v.startswith('pseudorandom'):
                 raw_operations = v.split('; ')
                 workload = list(map(parse_operation, raw_operations))
@@ -91,7 +92,14 @@ def parse_client_workloads(config):
 
 def main():
     # Read Configuration
-    configuration = read_configuration('config.txt')
+    # TODO: redo this
+    options, remainder = getopt.getopt(sys.argv[1:], 'c:')
+    config_file = 'config.txt'
+    for opt, arg in options:
+        if opt == '-c':
+            config_file = arg
+    output('Using configuration file: {}'.format(config_file))
+    configuration = read_configuration(config_file)
     client_count = configuration['num_client']
 
     configuration['initial_running_state'] = state.State({'key': 'value'})

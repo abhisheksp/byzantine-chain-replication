@@ -16,11 +16,12 @@ class State:
         return 'FAIL'
 
     def slice(self, key, slice_):
-        left, right = map(int, slice_.split(':'))
-        is_within_bounds = left >= 0 and right <= len(self.value[key])
-        if key in self.value and is_within_bounds:
-            self.value[key] = self.value[key][left:right]
-            return 'OK'
+        if key in self.value:
+            left, right = map(int, slice_.split(':'))
+            is_within_bounds = left >= 0 and right <= len(self.value[key])
+            if is_within_bounds:
+                self.value[key] = self.value[key][left:right]
+                return 'OK'
         return 'FAIL'
 
     def __repr__(self):
