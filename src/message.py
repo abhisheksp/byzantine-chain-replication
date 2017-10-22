@@ -10,6 +10,7 @@ class Message:
     client_request_tag = 'request'
     client_retransmission_tag = 'retransmission'
     replica_response_tag = 'response'
+    replica_error_response_tag = 'error'
     reconfiguration_tag = 'reconfiguration_request'
     request_shuttle_tag = 'request_shuttle'
     result_shuttle_tag = 'result_shuttle'
@@ -45,6 +46,10 @@ class Message:
     def new_response(self, payload):
         message_body = {'replica_id': self.identifier, 'payload': payload}
         return self.replica_response_tag, message_body
+
+    def new_error_response(self, payload):
+        message_body = {'replica_id': self.identifier, 'payload': payload}
+        return self.replica_error_response_tag, message_body
 
     def new_request_shuttle(self, payload):
         message_body = {'replica_id': self.identifier, 'payload': payload}

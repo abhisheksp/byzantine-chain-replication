@@ -4,10 +4,15 @@ import nacl
 import util
 from message import Message
 from slot import Slot
+from constants import Mode
 
 
 class Replica(process):
     def setup(client_processes, replica_id, config):
+        self.mode = Mode.ACTIVE
+        # TODO: implement history and type
+        self.history = []
+        self.type = None
         self.running_state = config['initial_running_state']
         signing_key = config['replica_sks'][self.replica_id]
         self.verifying_key = config['replica_vks'][self.replica_id]  # TODO: required?
@@ -57,7 +62,12 @@ class Replica(process):
         if is_verified:
             output('Replica {} : Received Client: {} Retransmission Request, Payload: {}'.format(self.replica_id,
                                                                                                  client_id, operation))
-            handle_retransmission_request(client_id, request_id, operation)
+            if self.mode == Mode.IMMUTABLE:
+                error = 'Proof of Misbehaviour'
+                error_response = self.factory.new_error_response(serialize_and_sign(error))
+                respond_to_client(client_id, error_response)
+            else:
+                handle_retransmission_request(client_id, request_id, operation)
 
     def receive(msg=('result_shuttle', payload)):
         sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
@@ -113,7 +123,7 @@ class Replica(process):
             output('Replica {} : Request: {} already processed'.format(self.replica_id, request_id))
             result_shuttle = self.result_shuttle_cache[(client_id, request_id)]
             result_shuttle_payload = serialize_and_sign({'result': result_shuttle.result,
-                                      'result_proof': result_shuttle.result_proof._asdict()})
+                                                         'result_proof': result_shuttle.result_proof._asdict()})
             respond_to_client(client_id, result_shuttle_payload)
 
     # TODO: move to message
@@ -135,6 +145,7 @@ class Replica(process):
         if not is_verified or prev_order_proof.slot != next_slot:
             output('Proof of Misbehaviour')
             proof_of_misbehaviour = 'Signature Verification Failed or Slot Hole found'
+            self.mode = Mode.IMMUTABLE
             send_reconfiguration_request(proof_of_misbehaviour)
             return
         client_id, operation = prev_order_proof.client_id, prev_order_proof.operation
@@ -174,7 +185,8 @@ class Replica(process):
 
     def forward_request_shuttle(request_shuttle):
         if not self.is_tail:
-            output('Replica {} : forwarding Request Shuttle to Replica: {}'.format(self.replica_id, self.replica_id + 1))
+            output(
+                'Replica {} : forwarding Request Shuttle to Replica: {}'.format(self.replica_id, self.replica_id + 1))
             send(request_shuttle, to=self.next_replica)
 
     def forward_result_shuttle(result_shuttle):
