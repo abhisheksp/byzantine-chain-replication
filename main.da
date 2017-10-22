@@ -1,6 +1,10 @@
+import random
+import string
+
 import state
 import nacl.encoding
 import nacl.signing
+import operation
 
 client = import_da('client')
 olympus = import_da('olympus')
@@ -34,15 +38,66 @@ def read_configuration(filepath):
     return config
 
 
-def main():
-    config(channel='reliable')
-    # config and keys setup
+def parse_client_workloads(config):
+    def parse_operation(raw_operation):
+        if raw_operation.startswith('put'):
+            key, value = map(lambda x: x.strip('\''), raw_operation[5:-1].split(','))
+            return operation.new_put_operation(key, value)
+        elif raw_operation.startswith('get'):
+            key = raw_operation[5:-1].strip('\'')
+            return operation.new_get_operation(key)
+        elif raw_operation.startswith('append'):
+            key, value = map(lambda x: x.strip('\''), raw_operation[7:-1].split(','))
+            return operation.new_append_operation(key, value)
+        elif raw_operation.startswith('slice'):
+            key, value = map(lambda x: x.strip('\''), raw_operation[6:-1].split(','))
+            return operation.new_slice_operation(key, value)
 
+    def generate_operations(seed, count):
+        random.seed(seed)
+        operations = []
+        previous_keys = []
+        for _ in range(count):
+            op = random.randint(1, 4)
+            N = random.randint(0, 100)
+            rand_key = ''.join(random.choices(string.ascii_letters + string.digits, k=N))
+            rand_value = ''.join(random.choices(string.ascii_letters + string.digits, k=N))
+            previous_keys.append(rand_key)
+            rand_prev_key = random.choice(previous_keys)
+            rand_slice = str(random.randint(0, 10)) + ':' + str(random.randint(0, 10))
+            if op == 1:
+                operations.append(operation.new_put_operation(rand_key, rand_value))
+            elif op == 2:
+                operations.append(operation.new_get_operation(rand_prev_key))
+            elif op == 3:
+                operations.append(operation.new_append_operation(rand_key, rand_value))
+            else:
+                operations.append(operation.new_slice_operation(rand_key, rand_slice))
+        return operations
+
+    client_workload = {}
+    for k, v in config.items():
+        if k.startswith('workload'):
+            client_id = int(k[k.find('[') + 1])
+            if not v.startswith('pseudorandom'):
+                raw_operations = v.split('; ')
+                workload = list(map(parse_operation, raw_operations))
+            else:
+                seed, n = map(int, v[v.find('(') + 1:-1].split(','))
+                workload = generate_operations(seed, n)
+            client_workload[client_id] = workload
+    return client_workload
+
+
+def main():
     # Read Configuration
     configuration = read_configuration('config.txt')
     client_count = configuration['num_client']
 
     configuration['initial_running_state'] = state.State({'key': 'value'})
+
+    # Generate Workloads for clients
+    configuration['client_workload'] = parse_client_workloads(configuration)
 
     # Setup Keys
     client_sks, client_vks = generate_keys(client_count)
@@ -55,6 +110,8 @@ def main():
     olympus_singing_key, olympus_verifying_key = olympus_key()
     configuration['olympus_singing_key'] = olympus_singing_key
     configuration['olympus_verifying_key'] = olympus_verifying_key
+
+    config(channel='reliable')
 
     # Setup Processes
 
