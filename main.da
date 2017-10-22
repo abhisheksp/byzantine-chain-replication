@@ -12,22 +12,12 @@ def olympus_key():
     return signing_key, verify_key
 
 
-def client_keys():
-    # TODO: extend to multiple clients
-    signing_key = nacl.signing.SigningKey.generate()
-    verify_key = signing_key.verify_key
-    signing_keys = {1: signing_key}
-    verifying_keys = {1: verify_key}
-    return signing_keys, verifying_keys
-
-
-def replica_keys(replica_count):
-    # TODO: extend to multiple replicas
+def generate_keys(count):
     signing_keys = {}
     verifying_keys = {}
-    for replica_id in range(1, replica_count + 1):
-        signing_keys[replica_id] = nacl.signing.SigningKey.generate()
-        verifying_keys[replica_id] = signing_keys[replica_id].verify_key
+    for id_ in range(1, count + 1):
+        signing_keys[id_] = nacl.signing.SigningKey.generate()
+        verifying_keys[id_] = signing_keys[id_].verify_key
     return signing_keys, verifying_keys
 
 
@@ -47,24 +37,37 @@ def read_configuration(filepath):
 def main():
     config(channel='reliable')
     # config and keys setup
+
+    # Read Configuration
     configuration = read_configuration('config.txt')
+    client_count = configuration['num_client']
+
     configuration['initial_running_state'] = state.State({'key': 'value'})
-    client_sks, client_vks = client_keys()
+
+    # Setup Keys
+    client_sks, client_vks = generate_keys(client_count)
     configuration['client_sks'] = client_sks
     configuration['client_vks'] = client_vks
     configuration['replica_count'] = 2 * configuration['t'] + 1
-    replica_sks, replica_vks = replica_keys(configuration['replica_count'])
+    replica_sks, replica_vks = generate_keys(configuration['replica_count'])
     configuration['replica_sks'] = replica_sks
     configuration['replica_vks'] = replica_vks
     olympus_singing_key, olympus_verifying_key = olympus_key()
     configuration['olympus_singing_key'] = olympus_singing_key
     configuration['olympus_verifying_key'] = olympus_verifying_key
-    # TODO: extend to multiple clients
-    configuration['client_id'] = 1
 
-    # process setup
-    client_process = new(client.Client, args=(configuration,))
-    client_processes = {1: client_process}
-    olympus_process = new(olympus.Olympus, args=(client_processes, configuration,))
-    start(client_process)
+    # Setup Processes
+
+    # Setup Clients
+    client_processes = {}
+    for client_id in range(1, client_count + 1):
+        # TODO: isolate client configuration
+        client_process = new(client.Client, args=(client_id, configuration))
+        client_processes[client_id] = client_process
+
+    # Setup Olympus
+    olympus_process = new(olympus.Olympus, args=(client_processes, configuration))
+
+    # Start Processes
+    start(set(client_processes.values()))
     start(olympus_process)

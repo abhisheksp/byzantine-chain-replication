@@ -5,16 +5,15 @@ from message import Message
 
 
 class Client(process):
-    def setup(config):
+    def setup(client_id, config):
         self.head = None
         self.olympus = None
-        self.client_id = config['client_id']
-        signing_key = config['client_sks'][self.client_id]
+        signing_key = config['client_sks'][client_id]
         self.sign = lambda x: signing_key.sign(x)
-        self.verifying_key = config['client_vks'][self.client_id]
+        self.verifying_key = config['client_vks'][client_id]
         self.olympus_vk = config['olympus_verifying_key']
         self.replica_vks = config['replica_vks']
-        self.factory = Message(self.client_id)
+        self.factory = Message(client_id)
         self.request_timeout = (config['client_timeout'] / 1000)
         self.pending_requests = set()
         output('Client setup finished...')
