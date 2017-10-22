@@ -1,10 +1,10 @@
 import pickle
+
 import nacl
-import operation
-import json
 import util
-from state import State
+
 from message import Message
+from state import State
 
 
 class Client(process):

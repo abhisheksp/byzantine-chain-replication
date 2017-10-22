@@ -1,11 +1,14 @@
+import getopt
 import random
 import string
-import state
+import sys
+
 import nacl.encoding
 import nacl.signing
+import os
+
 import operation
-import sys
-import getopt
+import state
 
 client = import_da('client')
 olympus = import_da('olympus')
@@ -98,8 +101,11 @@ def main():
     for opt, arg in options:
         if opt == '-c':
             config_file = arg
-    output('Using configuration file: {}'.format(config_file))
-    configuration = read_configuration(config_file)
+    config_dir = 'config'
+    parent_dir = os.path.abspath(os.pardir)
+    full_config_path = os.path.join(parent_dir, config_dir, config_file)
+    output('Using configuration file: {}'.format(full_config_path))
+    configuration = read_configuration(full_config_path)
     client_count = configuration['num_client']
 
     configuration['initial_running_state'] = state.State()

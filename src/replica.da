@@ -1,9 +1,10 @@
 import pickle
+
 import nacl
-import json
+from slot import Slot
+
 import util
 from message import Message
-from slot import Slot
 
 
 class Replica(process):
