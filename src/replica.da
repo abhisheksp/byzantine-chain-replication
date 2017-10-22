@@ -10,8 +10,8 @@ from constants import Mode
 class Replica(process):
     def setup(client_processes, replica_id, config):
         self.mode = Mode.ACTIVE
-        # TODO: implement history and type
         self.history = []
+        # TODO: type
         self.type = None
         self.running_state = config['initial_running_state']
         signing_key = config['replica_sks'][self.replica_id]
@@ -110,6 +110,7 @@ class Replica(process):
         result_proof = self.factory.new_result_proof(empty_result_proof, signed_result_statement)
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
+        self.history.append(order_proof)
         forward_request_shuttle(request_shuttle)
         output_running_state()
         # FOR DEMO PURPOSE
@@ -158,6 +159,7 @@ class Replica(process):
         result_proof = self.factory.new_result_proof(prev_result_proof, signed_result_statement)
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
+        self.history.append(order_proof)
         forward_request_shuttle(request_shuttle)
         if self.is_tail:
             result_shuttle_payload = serialize_and_sign({'result': result, 'result_proof': result_proof})
