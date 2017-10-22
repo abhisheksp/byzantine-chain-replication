@@ -1,8 +1,9 @@
 import pickle
+
 import nacl
 import util
-from slot import Slot
 from message import Message
+from slot import Slot
 
 
 class Replica(process):
@@ -56,6 +57,7 @@ class Replica(process):
         if is_verified:
             output('Replica {} : Received Client: {} Retransmission Request, Payload: {}'.format(self.replica_id,
                                                                                                  client_id, operation))
+            handle_retransmission_request(client_id, request_id, operation)
 
     def receive(msg=('result_shuttle', payload)):
         sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
@@ -103,11 +105,23 @@ class Replica(process):
         outfile = 'replica_state_{}.json'.format(self.replica_id)
         util.persist_state(self.running_state.value, outfile)
 
+    def handle_retransmission_request(client_id, request_id, operation):
+        output('Replica {} : Retransmission Request, RID:{}, Client: {}'.format(self.replica_id, request_id, client_id))
+        output_cache()
+        if (client_id, request_id) in self.result_shuttle_cache:
+            output('Replica {} : Request: {} already processed'.format(self.replica_id, request_id))
+            result_shuttle = self.result_shuttle_cache[(client_id, request_id)]
+            result_shuttle_payload = serialize_and_sign({'result': result_shuttle.result,
+                                      'result_proof': result_shuttle.result_proof._asdict()})
+            respond_to_client(client_id, result_shuttle_payload)
+
+    # TODO: move to message
     def parse_request_shuttle(payload):
         order_proof = self.factory.OrderProof(**payload['order_proof'])
         result_proof = self.factory.ResultProof(**payload['result_proof'])
         return self.factory.RequestShuttle(order_proof, result_proof)
 
+    # TODO: move to message
     def parse_result_shuttle(payload):
         result = payload['result']
         result_proof = self.factory.ResultProof(**payload['result_proof'])
@@ -133,11 +147,11 @@ class Replica(process):
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
         forward_request_shuttle(request_shuttle)
         if self.is_tail:
-            output('Replica {} : Sending Response to client'.format(self.replica_id))
             result_shuttle_payload = serialize_and_sign({'result': result, 'result_proof': result_proof})
             result_shuttle = self.factory.new_result_shuttle(result_shuttle_payload)
-            respond_to_client(client_id, result_shuttle_payload)
+            # FOR DEMO: order changed
             forward_result_shuttle(result_shuttle)
+            respond_to_client(client_id, result_shuttle_payload)
         output_running_state()
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
@@ -151,6 +165,7 @@ class Replica(process):
                                   'result_proof': result_shuttle.result_proof._asdict()}
         result_shuttle = self.factory.new_result_shuttle(serialize_and_sign(result_shuttle_payload))
         forward_result_shuttle(result_shuttle)
+        output_cache()
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
@@ -158,7 +173,7 @@ class Replica(process):
 
     def forward_request_shuttle(request_shuttle):
         if not self.is_tail:
-            output('Replica {} : forwarding request to Replica: {}'.format(self.replica_id, self.replica_id + 1))
+            output('Replica {} : forwarding Request Shuttle to Replica: {}'.format(self.replica_id, self.replica_id + 1))
             send(request_shuttle, to=self.next_replica)
 
     def forward_result_shuttle(result_shuttle):
