@@ -41,11 +41,14 @@ class Client(process):
         output('received response from replica')
         is_verified, payload = verify_replica(payload)
         if is_verified:
-            output("Received Replica Response, Payload:", payload)
             result = payload['result']
             result_proof = payload['result_proof']
             request_id = result_proof['request_id']
-            self.pending_requests.remove(request_id)
+            if request_id in self.pending_requests:
+                output("Received Replica Response, Payload:", payload)
+                self.pending_requests.remove(request_id)
+            else:
+                output("Dropping Duplicate Replica Response, Payload:", payload)
 
     def send_request(operation):
         payload = serialize_and_sign(operation)

@@ -1,9 +1,7 @@
 import pickle
-
 import nacl
-from slot import Slot
-
 import util
+from slot import Slot
 from message import Message
 
 
