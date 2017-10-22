@@ -6,6 +6,7 @@ from collections import namedtuple
 
 
 class Message:
+    # TODO: fix tag consistency
     client_request_tag = 'request'
     client_retransmission_tag = 'retransmission'
     replica_response_tag = 'response'

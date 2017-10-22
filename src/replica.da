@@ -53,6 +53,12 @@ class Replica(process):
                 prev_req_shuttle = parse_request_shuttle(payload)
                 handle_request_shuttle(prev_req_shuttle)
 
+    def receive(msg=('retransmission', payload)):
+        is_verified, client_id, request_id, operation = verify_client(payload)
+        if is_verified:
+            output('Replica {} : Received Client: {} Retransmission Request, Payload: {}'.format(self.replica_id,
+                                                                                                 client_id, operation))
+
     def receive(msg=('result_shuttle', payload)):
         sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
         is_verified, payload = verify_replica(sender_replica_id, signed_payload)
@@ -99,7 +105,6 @@ class Replica(process):
         outfile = 'replica_state_{}.json'.format(self.replica_id)
         util.persist_state(self.running_state.value, outfile)
 
-
     def parse_request_shuttle(payload):
         order_proof = self.factory.OrderProof(**payload['order_proof'])
         result_proof = self.factory.ResultProof(**payload['result_proof'])
@@ -111,7 +116,6 @@ class Replica(process):
         return self.factory.ResultShuttle(result, result_proof)
 
     def handle_request_shuttle(prev_req_shuttle):
-        # TODO: verify order_proof
         prev_order_proof, prev_result_proof = prev_req_shuttle.order_proof, prev_req_shuttle.result_proof
         is_verified = verify_order_proof(prev_order_proof)
         next_slot = next(self.slot)
@@ -140,7 +144,6 @@ class Replica(process):
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
         util.persist_state(self.running_state.value, outfile)
-
 
     def handle_result_shuttle(result_shuttle):
         result_proof = result_shuttle.result_proof
