@@ -138,22 +138,11 @@ class Client(process):
     def demo():
         verification_running_state = State()
 
-        def apply_operation(state, payload):
-            operation = payload['operation']
-            if operation == 'put':
-                return state.put(payload['key'], payload['val'])
-            elif operation == 'get':
-                return state.get(payload['key'])
-            elif operation == 'append':
-                return state.append(payload['key'], payload['val'])
-            elif operation == 'slice':
-                return state.slice(payload['key'], payload['slice'])
-
         def regular_client_workflow():
             client_workloads = config['client_workload'][self.client_id]
             custom_log('INFO: Client Workload Operations: {}'.format(client_workloads))
             for operation in client_workloads:
-                apply_operation(verification_running_state, operation)
+                op.apply_operation(verification_running_state, operation)
                 send_request(operation, self.head)
             outfile = 'client_state_{}.json'.format(self.client_id)
             testutil.persist_state(verification_running_state.value, outfile)
@@ -161,7 +150,7 @@ class Client(process):
         def demo_forward_requests():
             custom_log('INFO: Demoing Forwarding Request: Sending New Request to Nonhead Replica')
             operation = op.new_put_operation('movie', 'inception')
-            apply_operation(verification_running_state, operation)
+            op.apply_operation(verification_running_state, operation)
             non_head_replica = self.replica_processes[2]
             send_request(operation, non_head_replica)
             outfile = 'client_state_{}.json'.format(self.client_id)
@@ -171,7 +160,6 @@ class Client(process):
             dummy_request_id = 98374982
             operation = op.new_put_operation('dummy', 'dummy')
             retransmit_request(dummy_request_id, operation)
-
 
         custom_log('INFO: Starting DEMO')
         test_case = self.config['test_case']

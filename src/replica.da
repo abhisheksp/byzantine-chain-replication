@@ -1,7 +1,8 @@
 import pickle
+import time
 
 import testutil
-import time
+import operation as op
 from constants import Mode
 from message import Message
 from slot import Slot
@@ -119,7 +120,7 @@ class Replica(process):
             'order_statements': []
         }
 
-        result = apply_operation(operation)
+        result = op.apply_operation(self.running_state, operation)
         empty_order_proof = self.factory.OrderProof(**new_order_proof_details)
         order_proof = self.factory.new_order_proof(empty_order_proof, signed_order_statement)
         result_statement = self.factory.new_result_statement(operation, result)
@@ -190,7 +191,7 @@ class Replica(process):
         order_statement = self.factory.new_order_statement(prev_order_proof.operation, prev_order_proof.slot)
         signed_order_statement = serialize_and_sign(order_statement)
         order_proof = self.factory.new_order_proof(prev_order_proof, signed_order_statement)
-        result = apply_operation(operation)
+        result = op.apply_operation(self.running_state, operation)
         result_statement = self.factory.new_result_statement(operation, result)
         signed_result_statement = serialize_and_sign(result_statement)
         result_proof = self.factory.new_result_proof(prev_result_proof, signed_result_statement)
@@ -252,17 +253,6 @@ class Replica(process):
         signed_message = serialize_and_sign(proof_of_misbehaviour)
         reconfig_request = self.factory.new_reconfiguration_request(type_, signed_message)
         send(reconfig_request, to=self.olympus)
-
-    def apply_operation(payload):
-        operation = payload['operation']
-        if operation == 'put':
-            return self.running_state.put(payload['key'], payload['val'])
-        elif operation == 'get':
-            return self.running_state.get(payload['key'])
-        elif operation == 'append':
-            return self.running_state.append(payload['key'], payload['val'])
-        elif operation == 'slice':
-            return self.running_state.slice(payload['key'], payload['slice'])
 
     def send_response_to_client(client_id, result_shuttle):
         response = self.factory.new_response(result_shuttle)
