@@ -28,6 +28,12 @@ class Replica(process):
         self.head_timeout = config['head_timeout']
         self.non_head_timeout = config['nonhead_timeout']
 
+        # For Demo
+        self.client_request_count = {cid: 0 for cid in self.client_processes.keys()}
+        self.forward_request_count = {cid: 0 for cid in self.client_processes.keys()}
+        self.request_shuttle_count = {cid: 0 for cid in self.client_processes.keys()}
+        self.result_shuttle_count = {cid: 0 for cid in self.client_processes.keys()}
+
     def run():
         output('Started Replica {}'.format(self.replica_id))
         await(some(received(('new_configuration', _,))))
@@ -62,6 +68,7 @@ class Replica(process):
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
             if is_verified:
                 client_id, request_id = payload['client_id'], payload['request_id']
+                self.forward_request_count[client_id] += 1
                 output('Replica {} : Received Forward Request from Replica {}, Client: {} RequestID: {}'.format(
                     self.replica_id, sender_replica_id, client_id, request_id))
                 operation = payload['operation']
@@ -108,6 +115,7 @@ class Replica(process):
             handle_result_shuttle(result_shuttle)
 
     def handle_new_request(client_id, request_id, operation):
+        self.client_request_count[client_id] += 1
         next_slot = next(self.slot)
         order_statement = self.factory.new_order_statement(operation, next_slot)
         signed_order_statement = serialize_and_sign(order_statement)
@@ -187,8 +195,9 @@ class Replica(process):
             send_reconfiguration_request(proof_of_misbehaviour)
             return
         client_id, request_id = prev_order_proof.client_id, prev_order_proof.request_id
+        self.request_shuttle_count[client_id] += 1
         operation = prev_order_proof.operation
-        order_statement = self.factory.new_order_statement(prev_order_proof.operation, prev_order_proof.slot)
+        order_statement = self.factory.new_order_statement(operation, prev_order_proof.slot)
         signed_order_statement = serialize_and_sign(order_statement)
         order_proof = self.factory.new_order_proof(prev_order_proof, signed_order_statement)
         result = op.apply_operation(self.running_state, operation)
@@ -215,6 +224,7 @@ class Replica(process):
     def handle_result_shuttle(result_shuttle):
         result_proof = result_shuttle.result_proof
         client_id, request_id = result_proof.client_id, result_proof.request_id
+        self.result_shuttle_count[client_id] += 1
         is_verified = verify_result_statements_sign(result_proof.result_statements)
         if is_verified:
             self.result_shuttle_cache[(client_id, request_id)] = result_shuttle
@@ -294,10 +304,24 @@ class Replica(process):
         message = '\n'.join(map(formatter, self.result_shuttle_cache.items()))
         output('Replica {} : Cache: {}'.format(self.replica_id, message))
 
-    def failure_injection():
+    def failure_injection(type_=None):
+        # For Test Cases
         if self.config['test_case'] == 2:
             output('Replica {} : Failure Injection: Sleep'.format(self.replica_id))
             time.sleep(10)
         if self.config['test_case'] == 4:
             output('Replica {} : Failure Injection: Become Immutable'.format(self.replica_id))
             self.mode = Mode.IMMUTABLE
+
+        # For Explicit Failure Injections
+        # def change_operation():
+        #     return op.new_get_operation('x')
+        #
+        # def change_result():
+        #     return 'OK'
+        # if False:
+        #     if type_ == 'change_operation':
+        #         output('Replica {} : Failure Injection: Change Operation to get(\'x\')'.format(self.replica_id))
+        #         return change_operation()
+        #     elif type_ == 'change_result':
+        #         return change_result()
