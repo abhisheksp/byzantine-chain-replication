@@ -11,8 +11,6 @@ class Replica(process):
     def setup(client_processes, replica_id, signature, config):
         self.mode = Mode.ACTIVE
         self.history = []
-        # TODO: type
-        self.type = None
         self.running_state = config['initial_running_state']
         signing_key = config['replica_sks'][self.replica_id]
         self.factory = Message(self.replica_id)
@@ -35,6 +33,7 @@ class Replica(process):
         await(False)
 
     def receive(msg=('new_configuration', payload)):
+        failure_injection()
         output('Replica {} Received New Configuration from Olympus'.format(self.replica_id))
         self.olympus = payload['olympus']
         self.replica_processes = payload['replicas']
@@ -44,6 +43,7 @@ class Replica(process):
         self.prev_replica = None if self.is_head else self.replica_processes[self.replica_id - 1]
 
     def receive(msg=('request', payload)):
+        failure_injection()
         if self.is_head:
             client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
             is_verified, operation = self.signature.verify_client(client_id, signed_payload)
@@ -55,6 +55,7 @@ class Replica(process):
                 output('Replica {} : Not Verified Client {} Request'.format(self.replica_id, client_id))
 
     def receive(msg=('forward_request', payload)):
+        failure_injection()
         if self.is_head:
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
@@ -69,6 +70,7 @@ class Replica(process):
                     handle_new_request(client_id, request_id, operation)
 
     def receive(msg=('request_shuttle', payload)):
+        failure_injection()
         if not self.is_head:
             # TODO: sender_replica_id required?
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
@@ -80,6 +82,7 @@ class Replica(process):
                 handle_request_shuttle(prev_req_shuttle)
 
     def receive(msg=('retransmission', payload)):
+        failure_injection()
         client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
         is_verified, operation = self.signature.verify_client(client_id, signed_payload)
         if is_verified:
@@ -88,11 +91,12 @@ class Replica(process):
             if self.mode == Mode.IMMUTABLE:
                 error = 'ERROR'
                 error_response = self.factory.new_error_response(serialize_and_sign(error))
-                respond_to_client(client_id, error_response)
+                send_error_to_client(client_id, error_response)
             else:
                 handle_retransmission_request(client_id, request_id, operation)
 
     def receive(msg=('result_shuttle', payload)):
+        failure_injection()
         sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
         is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
         if is_verified:
@@ -160,7 +164,7 @@ class Replica(process):
         result_shuttle = self.result_shuttle_cache[(client_id, request_id)]
         result_shuttle_payload = serialize_and_sign({'result': result_shuttle.result,
                                                      'result_proof': result_shuttle.result_proof._asdict()})
-        respond_to_client(client_id, result_shuttle_payload)
+        send_response_to_client(client_id, result_shuttle_payload)
 
     def handle_unrecognized_request(client_id, request_id, operation):
         if self.is_head:
@@ -200,7 +204,7 @@ class Replica(process):
             result_shuttle = self.factory.new_result_shuttle(result_shuttle_payload)
             # FOR DEMO: order changed
             forward_result_shuttle(result_shuttle)
-            respond_to_client(client_id, result_shuttle_payload)
+            send_response_to_client(client_id, result_shuttle_payload)
         output_running_state()
 
         # FOR DEMO PURPOSE
@@ -260,12 +264,15 @@ class Replica(process):
         elif operation == 'slice':
             return self.running_state.slice(payload['key'], payload['slice'])
 
-    def respond_to_client(client_id, result_shuttle):
+    def send_response_to_client(client_id, result_shuttle):
         response = self.factory.new_response(result_shuttle)
         client_process = self.client_processes[client_id]
-        failure_injection()
         send(response, to=client_process)
         output("Replica {} : Responded to client with : {}".format(self.replica_id, result_shuttle))
+
+    def send_error_to_client(client_id, error_response):
+        client_process = self.client_processes[client_id]
+        send(error_response, to=client_process)
 
     def verify_order_proof(order_proof):
         slot_number = order_proof.slot
@@ -299,4 +306,8 @@ class Replica(process):
 
     def failure_injection():
         if self.config['test_case'] == 2:
+            output('Replica {} : Failure Injection: Sleep'.format(self.replica_id))
             time.sleep(10)
+        if self.config['test_case'] == 4:
+            output('Replica {} : Failure Injection: Become Immutable'.format(self.replica_id))
+            self.mode = Mode.IMMUTABLE

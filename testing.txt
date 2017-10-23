@@ -27,7 +27,7 @@ Check if request sequence is generated as specified in config file.
 Client must simulate the retransmission described in the paper by sleeping till it times out.
 Check if client correctly times out and sends request to all replicas if timely response not received.
 Head should handle the retransmissions as described in the paper (with 3 cases).
-All non-head replicas must send cached result if present, send error if IMMUTABLE, or forward request.
+All non-head replicas must send cached result if present.
 
 
 Configuration Filename: multiple_client_workload.txt
@@ -37,12 +37,12 @@ Commands used:
 > (new terminal session with project root as current working directory)
 > ./run_client.sh
 Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
-Additional Requirements: Check Logs manually to verify each event.
+Additional Requirements: Check logs manually to verify each event.
 
 
 Test Case 3:
 Scenario:
-All Non Head replicas send forward requests to head on receiving unrecognized retransmission request
+All Non Head replicas send forward requests to head on receiving unrecognized retransmission request.
 
 Configuration Filename: forward_request.txt
 Commands used:
@@ -51,4 +51,17 @@ Commands used:
 > (new terminal session with project root as current working directory)
 > ./run_client.sh
 Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
-Additional Requirements: Check Logs manually to verify each event.
+Additional Requirements: Check logs manually to verify each event.
+
+Test Case 4:
+Scenario:
+Send error message to client if Replica is Immutable
+Configuration Filename: forward_request.txt
+Commands used:
+> cd project_root
+> ./run_main2.sh
+> (new terminal session with project root as current working directory)
+> ./run_client.sh
+Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
+Additional Requirements: Check logs manually to verify each event.
+

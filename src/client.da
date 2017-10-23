@@ -62,11 +62,7 @@ class Client(process):
         is_verified, payload = self.signature.verify_replica(replica_id, signed_payload)
         if is_verified:
             custom_log('INFO: Error Response from Replica: {}, Payload: {}'.format(replica_id, payload))
-            result_proof = payload['result_proof']
-            request_id = result_proof['request_id']
-            if request_id in self.pending_requests:
-                handle_error_response(payload)
-                self.pending_requests.remove(request_id)
+            handle_error_response(payload)
 
     def handle_response(payload):
         result, result_proof = payload['result'], payload['result_proof']
@@ -171,17 +167,26 @@ class Client(process):
             outfile = 'client_state_{}.json'.format(self.client_id)
             testutil.persist_state(verification_running_state.value, outfile)
 
+        def demo_error_response():
+            dummy_request_id = 98374982
+            operation = op.new_put_operation('dummy', 'dummy')
+            retransmit_request(dummy_request_id, operation)
+
+
         custom_log('INFO: Starting DEMO')
         test_case = self.config['test_case']
         if test_case == 1:
-            custom_log('INFO: Executing Test Case: 1(Single Client)')
+            custom_log('INFO: Executing Test Case: 1')
             regular_client_workflow()
         if test_case == 2:
-            custom_log('INFO: Executing Test Case: 2(Multiple Client)')
+            custom_log('INFO: Executing Test Case: 2')
             regular_client_workflow()
         elif test_case == 3:
-            custom_log('INFO: Executing Test Case: 3(Single Client: Forward Request)')
+            custom_log('INFO: Executing Test Case: 3')
             demo_forward_requests()
+        elif test_case == 4:
+            custom_log('INFO: Executing Test Case: 4')
+            demo_error_response()
 
     def custom_log(log_message):
         output('Client: {} {}'.format(self.client_id, log_message))
