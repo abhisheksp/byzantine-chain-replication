@@ -6,7 +6,7 @@ class Olympus(process):
         self.signing_key = config['olympus_singing_key']
         # self.verifying_key = config['olympus_verifying_key']
         self.replica_count = config['replica_count']
-        output('Olympus setup finished...')
+        custom_log('INFO: Olympus setup finished ...')
 
     def run():
         replica_processes = {}
@@ -24,3 +24,6 @@ class Olympus(process):
 
     def receive(msg=('reconfiguration_request', payload)):
         output('Reconfiguration Request Raised')
+
+    def custom_log(log_message):
+        output('Olympus: {}'.format(log_message))

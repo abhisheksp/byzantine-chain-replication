@@ -90,14 +90,14 @@ class Client(process):
             retransmit_request(request_id, operation)
 
     def retransmit_request(old_request_id, operation):
-        custom_log('Retransmitting Old Request, RequestID: {} '.format(old_request_id))
+        custom_log('INFO: Retransmitting Old Request, RequestID: {} '.format(old_request_id))
         payload = serialize_and_sign(operation)
         request = self.factory.new_retransmission_request(old_request_id, payload)
         send(request, to=self.replica_processes_set)
         if await(old_request_id not in self.pending_requests):
             pass
         elif timeout(self.request_timeout):
-            custom_log('Retransmission Timed Out, Request ID: {}'.format(old_request_id))
+            custom_log('INFO: Retransmission Timed Out, Request ID: {}'.format(old_request_id))
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
