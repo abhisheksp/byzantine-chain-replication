@@ -59,7 +59,7 @@ class Replica(process):
             is_verified, operation = self.signature.verify_client(client_id, signed_payload)
             if is_verified:
                 custom_log('INFO: Received Client {} Request, Payload: {}'.format(client_id,
-                                                                                     operation))
+                                                                                  operation))
                 handle_new_request(client_id, request_id, operation)
             else:
                 custom_log('INFO: Not Verified Client {} Request'.format(client_id))
@@ -72,7 +72,7 @@ class Replica(process):
             if is_verified:
                 client_id, request_id = payload['client_id'], payload['request_id']
                 custom_log('INFO: Received Forward Request from Replica {}, Client: {} RequestID: {}'.format(
-                        sender_replica_id, client_id, request_id))
+                    sender_replica_id, client_id, request_id))
                 self.forward_request_count[client_id] += 1
                 operation = payload['operation']
                 if (client_id, request_id) in self.result_shuttle_cache:
@@ -89,7 +89,7 @@ class Replica(process):
             if is_verified:
                 custom_log('INFO: Orderstatement and Shuttle signature verification successful')
                 custom_log('INFO: Received Request Shuttle from Replica {}, Payload: {}'.format(
-                            sender_replica_id, payload))
+                    sender_replica_id, payload))
                 prev_req_shuttle = self.factory.parse_request_shuttle(payload)
                 handle_request_shuttle(prev_req_shuttle)
 
@@ -100,7 +100,7 @@ class Replica(process):
         if is_verified:
 
             custom_log('INFO: Received Client: {} Retransmission Request, Payload: {}'.format(
-                        client_id, operation))
+                client_id, operation))
             custom_log('INFO: Client request signature verification successful')
             if self.mode == Mode.IMMUTABLE:
                 custom_log('INFO: Replica Immutable. Sending Error to Client...')
@@ -119,7 +119,7 @@ class Replica(process):
         if is_verified:
             custom_log('INFO: Result shuttle signature verification successful')
             custom_log('INFO: Received Result Shuttle from Replica: {}, Payload: {}'.format(
-                       sender_replica_id, payload))
+                sender_replica_id, payload))
             result_shuttle = self.factory.parse_result_shuttle(payload)
             handle_result_shuttle(result_shuttle)
 
@@ -130,7 +130,8 @@ class Replica(process):
         self.client_request_count[client_id] += 1
         request_count = self.client_request_count[client_id]
         if (client_id, request_count, 'client_request', 'change_operation') in self.failures:
-            output('Replica {} : Changing Operation, Client: {} Message: {}'.format(self.replica_id, client_id, request_count))
+            output('Replica {} : Changing Operation, Client: {} Message: {}'.format(self.replica_id, client_id,
+                                                                                    request_count))
             operation = testutil.change_operation()
         next_slot = next(self.slot)
         order_statement = self.factory.new_order_statement(operation, next_slot)
@@ -147,7 +148,8 @@ class Replica(process):
         result = op.apply_operation(self.running_state, operation)
 
         if (client_id, request_count, 'client_request', 'change_result') in self.failures:
-            output('Replica {} : Changing Result, Client: {} Message: {}'.format(self.replica_id, client_id, request_count))
+            output('Replica {} : Changing Result, Client: {} Message: {}'.format(self.replica_id, client_id,
+                                                                                 request_count))
             result = testutil.change_result()
         empty_order_proof = self.factory.OrderProof(**new_order_proof_details)
         order_proof = self.factory.new_order_proof(empty_order_proof, signed_order_statement)
@@ -161,10 +163,12 @@ class Replica(process):
             'configuration': self.current_configuration,
             'result_statements': []
         }
+        custom_log('INFO: Adding Result Statement with Result: {}'.format(result))
         empty_result_proof = self.factory.ResultProof(**new_result_proof_details)
         result_proof = self.factory.new_result_proof(empty_result_proof, signed_result_statement)
         if (client_id, request_count, 'client_request', 'drop_result_stmt') in self.failures:
-            output('Replica {} : Dropping Result Stmt, Client: {} Message: {}'.format(self.replica_id, client_id, request_count))
+            output('Replica {} : Dropping Result Stmt, Client: {} Message: {}'.format(self.replica_id, client_id,
+                                                                                      request_count))
             result_proof = testutil.drop_result_stmt(result_proof)
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
@@ -233,7 +237,8 @@ class Replica(process):
         request_count = self.request_shuttle_count[client_id]
         operation = prev_order_proof.operation
         if (client_id, request_count, 'shuttle', 'change_operation') in self.failures:
-            custom_log('INFO: Changing Operation, Client: {} Message: {}'.format(self.replica_id, client_id, request_count))
+            custom_log(
+                'INFO: Changing Operation, Client: {} Message: {}'.format(self.replica_id, client_id, request_count))
             operation = testutil.change_operation()
         order_statement = self.factory.new_order_statement(operation, prev_order_proof.slot)
         signed_order_statement = serialize_and_sign(order_statement)
@@ -262,7 +267,8 @@ class Replica(process):
             result_shuttle_payload = serialize_and_sign({'result': result, 'result_proof': result_proof})
             result_shuttle = self.factory.new_result_shuttle(result_shuttle_payload)
             # FOR DEMO: order changed
-            custom_log('INFO: Replica is a tail. Forwarding result to client. Forwarding result shuttle back in the chain.')
+            custom_log(
+                'INFO: Replica is a tail. Forwarding result to client. Forwarding result shuttle back in the chain.')
             custom_log('INFO: Signed Result Shuttle: {}'.format(result_shuttle_payload))
             forward_result_shuttle(result_shuttle)
             send_response_to_client(client_id, result_shuttle_payload)
@@ -279,11 +285,17 @@ class Replica(process):
         custom_log('INFO: Result Shuttle Verified... Caching Result ...')
         client_id, request_id = result_proof.client_id, result_proof.request_id
         self.result_shuttle_count[client_id] += 1
-        is_verified = verify_result_statements_sign(result_proof.result_statements)
+        request_count = self.result_shuttle_count[client_id]
+        result_proof = result_proof._asdict()
+        if (client_id, request_count, 'result_shuttle', 'drop_result_stmt') in self.failures:
+            output('Replica {} : Dropping Result Stmt, Client: {} Message: {}'.format(self.replica_id, client_id,
+                                                                                      request_count))
+            result_proof = testutil.drop_result_stmt(result_proof)
+        is_verified = verify_result_statements_sign(result_proof['result_statements'])
         if is_verified:
             self.result_shuttle_cache[(client_id, request_id)] = result_shuttle
             result_shuttle_payload = {'result': result_shuttle.result,
-                                      'result_proof': result_shuttle.result_proof._asdict()}
+                                      'result_proof': result_proof}
             result_shuttle = self.factory.new_result_shuttle(serialize_and_sign(result_shuttle_payload))
             custom_log('INFO: Result shuttle to be forwarded: {}'.format(result_shuttle_payload))
             forward_result_shuttle(result_shuttle)
