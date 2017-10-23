@@ -57,7 +57,7 @@ def main():
         client_processes[client_id] = client_process.pop()
 
     # Setup Olympus
-    output('Setting Up Olympus ...')
+    output('INFO: Setting Up Olympus ...')
     olympus_process = new(olympus.Olympus, args=(client_processes, signature, configuration))
 
 

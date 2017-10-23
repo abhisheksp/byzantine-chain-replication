@@ -104,14 +104,18 @@ class Client(process):
         return self.sign(serialized_payload)
 
     def verify_result_proof(result, result_proof):
+        custom_log('INFO: Verifying Result and Result Proof ...')
         def verify_result_statements_sign(signed_result_statements):
             result_statements = []
             for i, signed_result_statement in enumerate(signed_result_statements):
                 replica_id = i + 1
                 is_verified, result_statement = self.signature.verify_replica(replica_id, signed_result_statement)
                 if not is_verified:
+                    custom_log('INFO: Signature Verification failed')
                     return False, None
                 result_statements.append(result_statement)
+            custom_log('INFO: Result Signature Verification Successful!')
+            custom_log('INFO: Verified Result: {}'.format(result_statements))
             return True, result_statements
 
         def find_majority(result_hashes):

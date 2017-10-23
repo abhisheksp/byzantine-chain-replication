@@ -264,11 +264,11 @@ class Replica(process):
     def handle_result_shuttle(result_shuttle):
         custom_log('INFO: Handling result shuttle ...')
         result_proof = result_shuttle.result_proof
-        custom_log('INFO: Result Shuttle Verified... Caching Result ...')
         client_id, request_id = result_proof.client_id, result_proof.request_id
         self.result_shuttle_count[client_id] += 1
         is_verified = verify_result_statements_sign(result_proof.result_statements)
         if is_verified:
+            custom_log('INFO: Result Shuttle Verified... Caching Result ...')
             self.result_shuttle_cache[(client_id, request_id)] = result_shuttle
             result_shuttle_payload = {'result': result_shuttle.result,
                                       'result_proof': result_shuttle.result_proof._asdict()}
