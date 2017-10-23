@@ -154,9 +154,11 @@ class Client(process):
             operation = op.new_put_operation('movie', 'inception')
             op.apply_operation(verification_running_state, operation)
             non_head_replica = self.replica_processes[2]
-            send_request(operation, non_head_replica)
-            outfile = 'client_state_{}.json'.format(self.client_id)
-            testutil.persist_state(verification_running_state.value, outfile)
+            payload = serialize_and_sign(operation)
+            dummy_request_id = 98374982
+            request = self.factory.new_retransmission_request(dummy_request_id, payload)
+            custom_log('INFO: Sending Single Retransmission Request to Replica 2')
+            send(request, to=non_head_replica)
 
         def demo_error_response():
             dummy_request_id = 98374982
