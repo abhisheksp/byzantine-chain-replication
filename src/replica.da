@@ -75,7 +75,7 @@ class Replica(process):
             if is_verified:
                 output('Replica {} : Received Request Shuttle from Replica {}, Payload: {}'.format(
                     self.replica_id, sender_replica_id, payload))
-                prev_req_shuttle = parse_request_shuttle(payload)
+                prev_req_shuttle = self.factory.parse_request_shuttle(payload)
                 handle_request_shuttle(prev_req_shuttle)
 
     def receive(msg=('retransmission', payload)):
@@ -98,7 +98,7 @@ class Replica(process):
             output('Replica {} : Received Result Shuttle from Replica: {}, Payload: {}'.format(self.replica_id,
                                                                                                sender_replica_id,
                                                                                                payload))
-            result_shuttle = parse_result_shuttle(payload)
+            result_shuttle = self.factory.parse_result_shuttle(payload)
             handle_result_shuttle(result_shuttle)
 
     def handle_new_request(client_id, request_id, operation):
@@ -113,7 +113,7 @@ class Replica(process):
             'configuration': 'DEFAULT',
             'order_statements': []
         }
-        # TODO: suspend on invalid operation request?
+
         result = apply_operation(operation)
         empty_order_proof = self.factory.OrderProof(**new_order_proof_details)
         order_proof = self.factory.new_order_proof(empty_order_proof, signed_order_statement)
@@ -139,7 +139,6 @@ class Replica(process):
         outfile = 'replica_state_{}.json'.format(self.replica_id)
         testutil.persist_state(self.running_state.value, outfile)
 
-    # TODO: check if serialized result can be cached directly
     def handle_retransmission_request(client_id, request_id, operation):
         output('Replica {} : Retransmission Request, RID:{}, Client: {}'.format(self.replica_id, request_id, client_id))
         if (client_id, request_id) in self.result_shuttle_cache:
@@ -149,7 +148,6 @@ class Replica(process):
 
     def handle_recognized_request(client_id, request_id):
         req_timeout = self.head_timeout if self.is_head else self.non_head_timeout
-        # TODO: add these to state
         if await(self.result_shuttle_cache[(client_id, request_id)] is not None):
             pass
         elif timeout(req_timeout):
@@ -170,18 +168,6 @@ class Replica(process):
             forward_request_payload = {'client_id': client_id, 'request_id': request_id, 'operation': operation}
             forward_request = self.factory.new_forward_request(serialize_and_sign(forward_request_payload))
             forward_to_head(forward_request)
-
-    # TODO: move to message
-    def parse_request_shuttle(payload):
-        order_proof = self.factory.OrderProof(**payload['order_proof'])
-        result_proof = self.factory.ResultProof(**payload['result_proof'])
-        return self.factory.RequestShuttle(order_proof, result_proof)
-
-    # TODO: move to message
-    def parse_result_shuttle(payload):
-        result = payload['result']
-        result_proof = self.factory.ResultProof(**payload['result_proof'])
-        return self.factory.ResultShuttle(result, result_proof)
 
     def handle_request_shuttle(prev_req_shuttle):
         prev_order_proof, prev_result_proof = prev_req_shuttle.order_proof, prev_req_shuttle.result_proof
