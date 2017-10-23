@@ -69,8 +69,8 @@ def parse_client_workloads(config):
 def parse_failure_scenarios(config):
     def parse_trigger_failure(trigger_failure_split):
         split = trigger_failure_split.split('),')
-        c = int(split[0][-3])
-        m = int(split[0][-1])
+        c = int(split[0][-3]) + 1
+        m = int(split[0][-1]) + 1
         if split[0].startswith('client'):
             trigger_type = 'client_request'
         elif split[0].startswith('forwarded'):
@@ -79,9 +79,10 @@ def parse_failure_scenarios(config):
             trigger_type = 'shuttle'
         elif split[0].startswith('result_shuttle'):
             trigger_type = 'result_shuttle'
+
         if 'operation' in split[1]:
             failure = 'change_operation'
-        elif 'result' in split[1]:
+        elif 'change_result' in split[1]:
             failure = 'change_result'
         else:
             failure = 'drop_result_stmt'

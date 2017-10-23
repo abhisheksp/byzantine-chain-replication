@@ -40,6 +40,7 @@ Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client
 Additional Requirements: Check logs manually to verify each event.
 
 
+<REMOVED, USE CONTENT FOR TEST 8>
 Test Case 3:
 Scenario:
 All Non Head replicas send forward requests to head on receiving unrecognized retransmission request.
@@ -53,15 +54,14 @@ Commands used:
 Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
 Additional Requirements: Check logs manually to verify each event.
 
-Test Case 4:
-Scenario:
-Send error message to client if Replica is Immutable
-Configuration Filename: forward_request.txt
-Commands used:
-> cd project_root
-> ./run_main2.sh
-> (new terminal session with project root as current working directory)
-> ./run_client.sh
-Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
-Additional Requirements: Check logs manually to verify each event.
+TEST 6:
+Result Proof verification
 
+Test 7:
+Order Proof Verification
+Immutable - Error
+Reconfigure Request
+
+Test 8:
+Forward Request Operation Change
+Consistency Check Fails

@@ -71,6 +71,8 @@ class Client(process):
             custom_log('INFO: Response Accepted, Request ID: {}'.format(result_proof['request_id']))
         else:
             custom_log('INFO: Response Rejected, Result Proof Verification Failed')
+            custom_log('INFO: Raise Reconfigure Request')
+            await(False)
 
     def handle_error_response(payload):
         custom_log('INFO: Request New Configuration from Olympus')
@@ -156,9 +158,11 @@ class Client(process):
             operation = op.new_put_operation('movie', 'inception')
             op.apply_operation(verification_running_state, operation)
             non_head_replica = self.replica_processes[2]
-            send_request(operation, non_head_replica)
-            outfile = 'client_state_{}.json'.format(self.client_id)
-            testutil.persist_state(verification_running_state.value, outfile)
+            payload = serialize_and_sign(operation)
+            dummy_request_id = 98374982
+            request = self.factory.new_retransmission_request(dummy_request_id, payload)
+            custom_log('INFO: Sending Single Retransmission Request to Replica 2')
+            send(request, to=non_head_replica)
 
         def demo_error_response():
             dummy_request_id = 98374982
@@ -166,7 +170,7 @@ class Client(process):
             retransmit_request(dummy_request_id, operation)
 
         custom_log('INFO: Starting DEMO')
-        test_case = self.config['test_case']
+        test_case = self.config.get('test_case', 0)
         if test_case == 1:
             custom_log('INFO: Executing Test Case: 1')
             regular_client_workflow()
@@ -179,6 +183,8 @@ class Client(process):
         elif test_case == 4:
             custom_log('INFO: Executing Test Case: 4')
             demo_error_response()
+        else:
+            regular_client_workflow()
 
     def custom_log(log_message):
         output('Client: {} {}'.format(self.client_id, log_message))
