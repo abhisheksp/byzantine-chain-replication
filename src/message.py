@@ -80,7 +80,7 @@ class Message:
             'request_id': previous_order_proof.request_id,
             'slot': previous_order_proof.slot,
             'operation': previous_order_proof.operation,
-            'configuration': 'DEFAULT',
+            'configuration': previous_order_proof.configuration,
             'order_statements': order_statements
         }
         return order_proof
@@ -102,7 +102,7 @@ class Message:
             'request_id': previous_result_proof.request_id,
             'result': previous_result_proof.result,
             'operation': previous_result_proof.operation,
-            'configuration': 'DEFAULT',
+            'configuration': previous_result_proof.configuration,
             'result_statements': result_statements
         }
         return result_proof

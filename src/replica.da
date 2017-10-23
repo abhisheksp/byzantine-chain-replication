@@ -27,6 +27,7 @@ class Replica(process):
         self.olympus = None
         self.head_timeout = config['head_timeout']
         self.non_head_timeout = config['nonhead_timeout']
+        self.current_configuration = 0
 
         # For Demo
         self.client_request_count = {cid: 0 for cid in self.client_processes.keys()}
@@ -124,7 +125,7 @@ class Replica(process):
             'request_id': request_id,
             'slot': next_slot,
             'operation': operation,
-            'configuration': 'DEFAULT',
+            'configuration': self.current_configuration,
             'order_statements': []
         }
 
@@ -138,7 +139,7 @@ class Replica(process):
             'request_id': request_id,
             'result': result_statement['result'],
             'operation': operation,
-            'configuration': 'DEFAULT',
+            'configuration': self.current_configuration,
             'result_statements': []
         }
         empty_result_proof = self.factory.ResultProof(**new_result_proof_details)
