@@ -1,6 +1,7 @@
 import pickle
 
 import testutil
+import time
 from constants import Mode
 from message import Message
 from slot import Slot
@@ -135,6 +136,7 @@ class Replica(process):
         self.history.append(order_proof)
         forward_request_shuttle(request_shuttle)
         output_running_state()
+
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
         testutil.persist_state(self.running_state.value, outfile)
@@ -200,6 +202,7 @@ class Replica(process):
             forward_result_shuttle(result_shuttle)
             respond_to_client(client_id, result_shuttle_payload)
         output_running_state()
+
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
         testutil.persist_state(self.running_state.value, outfile)
@@ -260,6 +263,7 @@ class Replica(process):
     def respond_to_client(client_id, result_shuttle):
         response = self.factory.new_response(result_shuttle)
         client_process = self.client_processes[client_id]
+        failure_injection()
         send(response, to=client_process)
         output("Replica {} : Responded to client with : {}".format(self.replica_id, result_shuttle))
 
@@ -292,3 +296,7 @@ class Replica(process):
         formatter = lambda x: 'Client: {} Request: {} => Result: {}'.format(x[0][0], x[0][1], x[1])
         message = '\n'.join(map(formatter, self.result_shuttle_cache.items()))
         output('Replica {} : Cache: {}'.format(self.replica_id, message))
+
+    def failure_injection():
+        if self.config['test_case'] == 2:
+            time.sleep(10)

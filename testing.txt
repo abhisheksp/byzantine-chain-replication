@@ -7,7 +7,7 @@ Head assigns slot, signs order statement, result statement and sends the shuttle
 Replicas must support dictionary operations - put, get, slice, append. Replica checks for validity of order proof
 and adds add signed order statement and signed result statement. Replicas must handle result shuttle - validate, save,
 and forward it. Client checks signatures and hashes in result proof. Client checks if the dictionary contains
-expected content after receiving the resposne. Tail sends result to client, and sends result shuttle to predecessor.
+expected content after receiving the response. Tail sends result to client, and sends result shuttle to predecessor.
 
 Configuration Filename: single_client_workload.txt
 Commands used: ./run_main1.sh
@@ -31,6 +31,20 @@ All non-head replicas must send cached result if present, send error if IMMUTABL
 
 
 Configuration Filename: multiple_client_workload.txt
+Commands used:
+> cd project_root
+> ./run_main2.sh
+> (new terminal session with project root as current working directory)
+> ./run_client.sh
+Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
+Additional Requirements: Check Logs manually to verify each event.
+
+
+Test Case 3:
+Scenario:
+All Non Head replicas send forward requests to head on receiving unrecognized retransmission request
+
+Configuration Filename: forward_request.txt
 Commands used:
 > cd project_root
 > ./run_main2.sh
