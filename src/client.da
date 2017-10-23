@@ -79,7 +79,7 @@ class Client(process):
             retransmit_request(request_id, operation)
 
     def retransmit_request(old_request_id, operation):
-        custom_log('Retransmitting Old Request, RequestID: {} ', old_request_id)
+        custom_log('Retransmitting Old Request, RequestID: {} '.format(old_request_id))
         payload = serialize_and_sign(operation)
         request = self.factory.new_retransmission_request(old_request_id, payload)
         send(request, to=self.replica_processes_set)
@@ -125,22 +125,21 @@ class Client(process):
 
     # FOR DEMO PURPOSES
     def demo():
+        verification_running_state = State()
+        def apply_operation(state, payload):
+            operation = payload['operation']
+            if operation == 'put':
+                return state.put(payload['key'], payload['val'])
+            elif operation == 'get':
+                return state.get(payload['key'])
+            elif operation == 'append':
+                return state.append(payload['key'], payload['val'])
+            elif operation == 'slice':
+                return state.slice(payload['key'], payload['slice'])
+
         def regular_client_workflow():
             # TODO: move to operation
-            def apply_operation(state, payload):
-                operation = payload['operation']
-                if operation == 'put':
-                    return state.put(payload['key'], payload['val'])
-                elif operation == 'get':
-                    return state.get(payload['key'])
-                elif operation == 'append':
-                    return state.append(payload['key'], payload['val'])
-                elif operation == 'slice':
-                    return state.slice(payload['key'], payload['slice'])
                     # TODO: handle unrecognized operation?
-
-            custom_log('INFO: Demoing Pseudorandom Client Requests: Sending New Request to Nonhead Replica')
-            verification_running_state = State()
             client_workloads = config['client_workload'][self.client_id]
             for operation in client_workloads:
                 apply_operation(verification_running_state, operation)
@@ -151,14 +150,22 @@ class Client(process):
         def demo_forward_requests():
             custom_log('INFO: Demoing Forwarding Request: Sending New Request to Nonhead Replica')
             operation = op.new_put_operation('movie', 'inception')
+            apply_operation(verification_running_state, operation)
             non_head_replica = self.replica_processes[2]
             send_request(operation, non_head_replica)
+            outfile = 'client_state_{}.json'.format(self.client_id)
+            testutil.persist_state(verification_running_state.value, outfile)
 
+        custom_log('INFO: Starting DEMO')
         test_case = self.config['test_case']
         if test_case == 1:
-            custom_log('INFO: Executing Test Case: 1(Regular Workflow)')
+            custom_log('INFO: Executing Test Case: 1(Single Client)')
             regular_client_workflow()
-        elif test_case == 2:
+        if test_case == 2:
+            custom_log('INFO: Executing Test Case: 2(Multiple Client)')
+            regular_client_workflow()
+        elif test_case == 3:
+            custom_log('INFO: Executing Test Case: 3(Single Client: Forward Request)')
             demo_forward_requests()
 
     def custom_log(log_message):

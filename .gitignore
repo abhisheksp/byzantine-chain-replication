@@ -153,3 +153,5 @@ fabric.properties
 
 # Mac Ignores
 .DS_Store
+
+logs/
