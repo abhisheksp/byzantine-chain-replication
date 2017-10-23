@@ -1,1 +1,4 @@
-TODO
+Case 1
+
+Pseudorandom Demo
+Dictionary Consistency Check

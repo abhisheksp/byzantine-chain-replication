@@ -23,69 +23,70 @@ class Client(process):
         self.request_timeout = (config['client_timeout'] / 1000)
         self.pending_requests = set()
         self.majority_replica_count = None
-        output('Client setup finished...')
 
     def run():
-        output('Client is up...')
-        output('awaiting new configuration from Olympus')
+        custom_log('INFO: Client is up and running')
+        custom_log('INFO: Initial State: (Pending_Requests: {})'.format(self.pending_requests))
+        custom_log('INFO: Awaiting new configuration from Olympus')
         await(some(received(('new_configuration', _,))))
-        demo_requests()
-        # demo_forward_requests()
+        demo()
         await(False)
 
     def receive(msg=('new_configuration', payload)):
-        output('received new configuration from Olympus')
+        custom_log('INFO: Received New Configuration from Olympus')
         self.olympus = payload['olympus']
         self.replica_processes = payload['replicas']
         self.replica_processes_set = set(self.replica_processes.values())
         self.head = self.replica_processes[1]
         replica_count = len(self.replica_processes_set)
         self.majority_replica_count = (replica_count // 2) + 1
+        custom_log('INFO: Storing Olympus and Replicas processes')
+        custom_log('INFO: Initialized Majority Replica Count: {}'.format(self.majority_replica_count))
 
     def receive(msg=('response', payload)):
         replica_id, signed_payload = payload['replica_id'], payload['payload']
         is_verified, payload = self.signature.verify_replica(replica_id, signed_payload)
         if is_verified:
-            output(
-                'Client: {}, Received Response from Replica: {}, Payload:'.format(self.client_id, replica_id, payload))
+            custom_log('INFO: Received Response from Replica: {}, Payload: {}'.format(replica_id, payload))
             result_proof = payload['result_proof']
             request_id = result_proof['request_id']
             if request_id in self.pending_requests:
-                output("Received Replica Response, Payload:", payload)
                 handle_response(payload)
                 self.pending_requests.remove(request_id)
             else:
-                output("Dropping Duplicate Replica Response, Payload:", payload)
+                custom_log(
+                    'INFO: Dropping Duplicate Response from Replica: {}, Payload: {}'.format(replica_id, payload))
 
     def handle_response(payload):
         result, result_proof = payload['result'], payload['result_proof']
         is_verified = verify_result_proof(result, result_proof)
         if is_verified:
-            output('Client {}: Response Accepted, Request ID: {}'.format(self.client_id, result_proof['request_id']))
+            custom_log('INFO: Response Accepted, Request ID: {}'.format(result_proof['request_id']))
         else:
-            output('Client {}: Response Rejecting, Proof of Misbehaviour'.format(self.client_id))
+            custom_log('INFO: Response Rejected, Result Proof Verification Failed')
 
-    def send_request(operation):
+    def send_request(operation, receiver):
         serialized_payload = serialize_and_sign(operation)
         request = self.factory.new_request(serialized_payload)
         request_id = request[1]['request_id']
         self.pending_requests.add(request_id)
-        send(request, to=self.head)
+        send(request, to=receiver)
+        custom_log('INFO: Sending Request, RequestID: {}, Receiver: {}, Operation: {}'.format(request_id, receiver, operation))
         if await(request_id not in self.pending_requests):
             pass
         elif timeout(self.request_timeout):
-            output('TimedOut, Issue Retransmission')
+            custom_log('INFO: Request Timed Out')
             retransmit_request(request_id, operation)
 
     def retransmit_request(old_request_id, operation):
-        output('Client: Retransmitting old request: ', old_request_id)
+        custom_log('Retransmitting Old Request, RequestID: {} ', old_request_id)
         payload = serialize_and_sign(operation)
         request = self.factory.new_retransmission_request(old_request_id, payload)
         send(request, to=self.replica_processes_set)
         if await(old_request_id not in self.pending_requests):
             pass
         elif timeout(self.request_timeout):
-            output('Retransmission Timed Out')
+            custom_log('Retransmission Timed Out, Request ID: {}'.format(old_request_id))
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
@@ -123,38 +124,42 @@ class Client(process):
         return is_required_majority and result_hash == majority_hash
 
     # FOR DEMO PURPOSES
-    def demo_requests():
-        def apply_operation(state, payload):
-            operation = payload['operation']
-            if operation == 'put':
-                return state.put(payload['key'], payload['val'])
-            elif operation == 'get':
-                return state.get(payload['key'])
-            elif operation == 'append':
-                return state.append(payload['key'], payload['val'])
-            elif operation == 'slice':
-                return state.slice(payload['key'], payload['slice'])
-                # TODO: handle unrecognized operation?
+    def demo():
+        def regular_client_workflow():
+            # TODO: move to operation
+            def apply_operation(state, payload):
+                operation = payload['operation']
+                if operation == 'put':
+                    return state.put(payload['key'], payload['val'])
+                elif operation == 'get':
+                    return state.get(payload['key'])
+                elif operation == 'append':
+                    return state.append(payload['key'], payload['val'])
+                elif operation == 'slice':
+                    return state.slice(payload['key'], payload['slice'])
+                    # TODO: handle unrecognized operation?
 
-        output('Starting Client Workload')
-        verification_running_state = State()
-        client_workloads = config['client_workload'][self.client_id]
-        for operation in client_workloads:
-            apply_operation(verification_running_state, operation)
-            send_request(operation)
-        outfile = 'client_state_{}.json'.format(self.client_id)
-        testutil.persist_state(verification_running_state.value, outfile)
+            custom_log('INFO: Demoing Pseudorandom Client Requests: Sending New Request to Nonhead Replica')
+            verification_running_state = State()
+            client_workloads = config['client_workload'][self.client_id]
+            for operation in client_workloads:
+                apply_operation(verification_running_state, operation)
+                send_request(operation, self.head)
+            outfile = 'client_state_{}.json'.format(self.client_id)
+            testutil.persist_state(verification_running_state.value, outfile)
 
-    def demo_forward_requests():
-        operation = op.new_put_operation('movie', 'inception')
-        non_head_replica = self.replica_processes[2]
-        serialized_payload = serialize_and_sign(operation)
-        request = self.factory.new_request(serialized_payload)
-        request_id = request[1]['request_id']
-        self.pending_requests.add(request_id)
-        send(request, to=non_head_replica)
-        if await(request_id not in self.pending_requests):
-            pass
-        elif timeout(self.request_timeout):
-            output('TimedOut, Issue Retransmission')
-            retransmit_request(request_id, operation)
+        def demo_forward_requests():
+            custom_log('INFO: Demoing Forwarding Request: Sending New Request to Nonhead Replica')
+            operation = op.new_put_operation('movie', 'inception')
+            non_head_replica = self.replica_processes[2]
+            send_request(operation, non_head_replica)
+
+        test_case = self.config['test_case']
+        if test_case == 1:
+            custom_log('INFO: Executing Test Case: 1(Regular Workflow)')
+            regular_client_workflow()
+        elif test_case == 2:
+            demo_forward_requests()
+
+    def custom_log(log_message):
+        output('Client: {} {}'.format(self.client_id, log_message))
