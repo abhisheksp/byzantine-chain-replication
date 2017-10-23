@@ -155,6 +155,7 @@ class Client(process):
 
         def regular_client_workflow():
             client_workloads = config['client_workload'][self.client_id]
+            custom_log('INFO: Client Workload Operations: {}'.format(client_workloads))
             for operation in client_workloads:
                 apply_operation(verification_running_state, operation)
                 send_request(operation, self.head)
