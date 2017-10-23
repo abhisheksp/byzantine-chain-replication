@@ -225,20 +225,32 @@ class Replica(process):
             proof_of_misbehaviour = 'Signature Verification Failed or Slot Hole found'
             self.mode = Mode.IMMUTABLE
             send_reconfiguration_request(proof_of_misbehaviour)
-            return
         custom_log('INFO: Order statements verification (inside the request shuttle) successful')
         custom_log('INFO: Running state before applying Operation:')
         output_running_state()
         client_id, request_id = prev_order_proof.client_id, prev_order_proof.request_id
         self.request_shuttle_count[client_id] += 1
+        request_count = self.request_shuttle_count[client_id]
         operation = prev_order_proof.operation
+        if (client_id, request_count, 'shuttle', 'change_operation') in self.failures:
+            custom_log('INFO: Changing Operation, Client: {} Message: {}'.format(self.replica_id, client_id, request_count))
+            operation = testutil.change_operation()
         order_statement = self.factory.new_order_statement(operation, prev_order_proof.slot)
         signed_order_statement = serialize_and_sign(order_statement)
         order_proof = self.factory.new_order_proof(prev_order_proof, signed_order_statement)
         result = op.apply_operation(self.running_state, operation)
+        if (client_id, request_count, 'shuttle', 'change_result') in self.failures:
+            custom_log('Changing Result, Client: {} Message: {}'.format(self.replica_id, client_id, request_count))
+            result = testutil.change_result()
+
         result_statement = self.factory.new_result_statement(operation, result)
         signed_result_statement = serialize_and_sign(result_statement)
         result_proof = self.factory.new_result_proof(prev_result_proof, signed_result_statement)
+        output('STATS: {} {} Failures: {}'.format(client_id, request_count, self.failures))
+
+        if (client_id, request_count, 'shuttle', 'drop_result_stmt') in self.failures:
+            custom_log('Dropping Result Stmt, Client: {} Message: {}'.format(self.replica_id, client_id, request_count))
+            result_proof = testutil.drop_result_stmt(result_proof)
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
         self.result_shuttle_cache[(client_id, request_id)] = None
@@ -353,22 +365,10 @@ class Replica(process):
 
     def failure_injection(type_=None):
         # For Test Cases
-        if self.config['test_case'] == 2:
-            output('Replica {} : Failure Injection: Sleep'.format(self.replica_id))
-            time.sleep(10)
-        if self.config['test_case'] == 4:
-            output('Replica {} : Failure Injection: Become Immutable'.format(self.replica_id))
-            self.mode = Mode.IMMUTABLE
-
-        # For Explicit Failure Injections
-        # def change_operation():
-        #     return op.new_get_operation('x')
-        #
-        # def change_result():
-        #     return 'OK'
-        # if False:
-        #     if type_ == 'change_operation':
-        #         output('Replica {} : Failure Injection: Change Operation to get(\'x\')'.format(self.replica_id))
-        #         return change_operation()
-        #     elif type_ == 'change_result':
-        #         return change_result()
+        # if self.config['test_case'] == 2:
+        #     output('Replica {} : Failure Injection: Sleep'.format(self.replica_id))
+        #     time.sleep(10)
+        # if self.config['test_case'] == 4:
+        #     output('Replica {} : Failure Injection: Become Immutable'.format(self.replica_id))
+        #     self.mode = Mode.IMMUTABLE
+        return None

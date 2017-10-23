@@ -65,3 +65,8 @@ Commands used:
 Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
 Additional Requirements: Check logs manually to verify each event.
 
+
+Test 7:
+Order Proof Verification
+Immutable - Error
+Reconfigure Request
