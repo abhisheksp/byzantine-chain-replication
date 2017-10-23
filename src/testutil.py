@@ -64,3 +64,37 @@ def parse_client_workloads(config):
                 workload = generate_operations(seed, n)
             client_workload[client_id] = workload
     return client_workload
+
+
+def parse_failure_scenarios(config):
+    def parse_trigger_failure(trigger_failure_split):
+        split = trigger_failure_split.split('),')
+        c = int(split[0][-3])
+        m = int(split[0][-1])
+        if split[0].startswith('client'):
+            trigger_type = 'client_request'
+        elif split[0].startswith('forwarded'):
+            trigger_type = 'forwarded_request'
+        elif split[0].startswith('shuttle'):
+            trigger_type = 'shuttle'
+        elif split[0].startswith('result_shuttle'):
+            trigger_type = 'result_shuttle'
+        if 'operation' in split[1]:
+            failure = 'change_operation'
+        elif 'result' in split[1]:
+            failure = 'change_result'
+        else:
+            failure = 'drop_result_stmt'
+        return c, m, trigger_type, failure
+
+    replica_failures = {}
+    for k, v in config.items():
+        if k.startswith('failures'):
+            configuration = int(k[k.find('[') + 1])
+            replica = int(k[k.find(']') - 1]) + 1
+            failures = {}
+            for trigger_failure in v.split('; '):
+                c, m, trigger_type, failure = parse_trigger_failure(trigger_failure)
+                failures[(c, m, trigger_type)] = failure
+            replica_failures[(configuration, replica)] = failures
+    return replica_failures

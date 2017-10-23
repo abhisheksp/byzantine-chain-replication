@@ -34,6 +34,8 @@ class Replica(process):
         self.forward_request_count = {cid: 0 for cid in self.client_processes.keys()}
         self.request_shuttle_count = {cid: 0 for cid in self.client_processes.keys()}
         self.result_shuttle_count = {cid: 0 for cid in self.client_processes.keys()}
+        failure_scenarios = config['failure_scenarios']
+        self.failures = failure_scenarios.get((self.current_configuration, self.replica_id), {})
 
     def run():
         output('Started Replica {}'.format(self.replica_id))
