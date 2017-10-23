@@ -1,4 +1,67 @@
-Case 1
+Test Case 1:
 
-Pseudorandom Demo
-Dictionary Consistency Check
+Scenario: 
+A single client, with a pseudorandom workload . Client sends the request to head and waits for a response.
+Olympus must create initial configuration - keys, create, setup, and start processes.
+Head assigns slot, signs order statement, result statement and sends the shuttle along the chain.
+Replicas must support dictionary operations - put, get, slice, append. Replica checks for validity of order proof
+and adds add signed order statement and signed result statement. Replicas must handle result shuttle - validate, save,
+and forward it. Client checks signatures and hashes in result proof. Client checks if the dictionary contains
+expected content after receiving the response. Tail sends result to client, and sends result shuttle to predecessor.
+
+Configuration Filename: single_client_workload.txt
+Commands used: ./run_main1.sh
+> cd project_root
+> ./run_main1.sh
+> (new terminal session with project root as current working directory)
+> ./run_client.sh
+Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
+Programmatic check: Check for state consistency by maintaining a local state copy at replica
+Commands: >./run_state_consistency_test.sh
+Outcome: Success indicates that the "verification" state copy at client is consistent with all the replicas, Failure indicates otherwise.
+
+Test Case 2:
+Scenario:
+Multiple clients, with sequence of workload as specified in the config file.
+Check if request sequence is generated as specified in config file.
+Client must simulate the retransmission described in the paper by sleeping till it times out.
+Check if client correctly times out and sends request to all replicas if timely response not received.
+Head should handle the retransmissions as described in the paper (with 3 cases).
+All non-head replicas must send cached result if present.
+
+
+Configuration Filename: multiple_client_workload.txt
+Commands used:
+> cd project_root
+> ./run_main2.sh
+> (new terminal session with project root as current working directory)
+> ./run_client.sh
+Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
+Additional Requirements: Check logs manually to verify each event.
+
+
+Test Case 3:
+Scenario:
+All Non Head replicas send forward requests to head on receiving unrecognized retransmission request.
+
+Configuration Filename: forward_request.txt
+Commands used:
+> cd project_root
+> ./run_main2.sh
+> (new terminal session with project root as current working directory)
+> ./run_client.sh
+Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
+Additional Requirements: Check logs manually to verify each event.
+
+Test Case 4:
+Scenario:
+Send error message to client if Replica is Immutable
+Configuration Filename: forward_request.txt
+Commands used:
+> cd project_root
+> ./run_main2.sh
+> (new terminal session with project root as current working directory)
+> ./run_client.sh
+Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
+Additional Requirements: Check logs manually to verify each event.
+

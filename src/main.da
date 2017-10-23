@@ -31,6 +31,7 @@ def main():
 
     # Generate Workloads for clients
     configuration['client_workload'] = testutil.parse_client_workloads(configuration)
+    configuration['failure_scenarios'] = testutil.parse_failure_scenarios(configuration)
 
     # Setup Keys
     signature = Signature()
@@ -44,8 +45,8 @@ def main():
     olympus_sk = signature.generate_olympus_keys()
     configuration['olympus_singing_key'] = olympus_sk
 
-    config(channel='reliable')
-    output('INFO: Channel = Reliable')
+    output('INFO: Channel = Reliable and FIFO')
+    config(channel={reliable, fifo})
     # Setup Processes
 
     # Setup Clients

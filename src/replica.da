@@ -1,6 +1,8 @@
 import pickle
+import time
 
 import testutil
+import operation as op
 from constants import Mode
 from message import Message
 from slot import Slot
@@ -10,8 +12,6 @@ class Replica(process):
     def setup(client_processes, replica_id, signature, config):
         self.mode = Mode.ACTIVE
         self.history = []
-        # TODO: type
-        self.type = None
         self.running_state = config['initial_running_state']
         signing_key = config['replica_sks'][self.replica_id]
         self.factory = Message(self.replica_id)
@@ -27,6 +27,15 @@ class Replica(process):
         self.olympus = None
         self.head_timeout = config['head_timeout']
         self.non_head_timeout = config['nonhead_timeout']
+        self.current_configuration = 0
+
+        # For Demo
+        self.client_request_count = {cid: 0 for cid in self.client_processes.keys()}
+        self.forward_request_count = {cid: 0 for cid in self.client_processes.keys()}
+        self.request_shuttle_count = {cid: 0 for cid in self.client_processes.keys()}
+        self.result_shuttle_count = {cid: 0 for cid in self.client_processes.keys()}
+        failure_scenarios = config['failure_scenarios']
+        self.failures = failure_scenarios.get((self.current_configuration, self.replica_id), {})
 
     def run():
         custom_log('INFO: Started Replica {}'.format(self.replica_id))
@@ -35,6 +44,7 @@ class Replica(process):
 
     def receive(msg=('new_configuration', payload)):
         custom_log('INFO: Received New Configuration from Olympus')
+        failure_injection()
         self.olympus = payload['olympus']
         self.replica_processes = payload['replicas']
         # TODO: Extract Head Tail constant
@@ -43,6 +53,7 @@ class Replica(process):
         self.prev_replica = None if self.is_head else self.replica_processes[self.replica_id - 1]
 
     def receive(msg=('request', payload)):
+        failure_injection()
         if self.is_head:
             client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
             is_verified, operation = self.signature.verify_client(client_id, signed_payload)
@@ -54,6 +65,7 @@ class Replica(process):
                 custom_log('INFO: Not Verified Client {} Request'.format(client_id))
 
     def receive(msg=('forward_request', payload)):
+        failure_injection()
         if self.is_head:
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
@@ -61,6 +73,7 @@ class Replica(process):
                 client_id, request_id = payload['client_id'], payload['request_id']
                 custom_log('INFO: Received Forward Request from Replica {}, Client: {} RequestID: {}'.format(
                         sender_replica_id, client_id, request_id))
+                self.forward_request_count[client_id] += 1
                 operation = payload['operation']
                 if (client_id, request_id) in self.result_shuttle_cache:
                     handle_recognized_request(client_id, request_id)
@@ -68,18 +81,20 @@ class Replica(process):
                     handle_new_request(client_id, request_id, operation)
 
     def receive(msg=('request_shuttle', payload)):
+        failure_injection()
         if not self.is_head:
             # TODO: sender_replica_id required?
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
             if is_verified:
+                custom_log('INFO: Orderstatement and Shuttle signature verification successful')
                 custom_log('INFO: Received Request Shuttle from Replica {}, Payload: {}'.format(
                             sender_replica_id, payload))
-                custom_log('INFO: Orderstatement and Shuttle signature verification successful')
-                prev_req_shuttle = parse_request_shuttle(payload)
+                prev_req_shuttle = self.factory.parse_request_shuttle(payload)
                 handle_request_shuttle(prev_req_shuttle)
 
     def receive(msg=('retransmission', payload)):
+        failure_injection()
         client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
         is_verified, operation = self.signature.verify_client(client_id, signed_payload)
         if is_verified:
@@ -89,28 +104,30 @@ class Replica(process):
             custom_log('INFO: Client request signature verification successful')
             if self.mode == Mode.IMMUTABLE:
                 custom_log('INFO: Replica Immutable. Sending Error to Client...')
-                error = 'Proof of Misbehaviour'
+                error = 'ERROR'
                 error_response = self.factory.new_error_response(serialize_and_sign(error))
                 custom_log('INFO: {}'.format(error_response))
-                respond_to_client(client_id, error_response)
+                send_error_to_client(client_id, error_response)
             else:
                 custom_log('INFO: Handling Retransmission Request...')
                 handle_retransmission_request(client_id, request_id, operation)
 
     def receive(msg=('result_shuttle', payload)):
+        failure_injection()
         sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
         is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
         if is_verified:
+            custom_log('INFO: Result shuttle signature verification successful')
             custom_log('INFO: Received Result Shuttle from Replica: {}, Payload: {}'.format(
                        sender_replica_id, payload))
-            custom_log('INFO: Result shuttle signature verification successful')
-            result_shuttle = parse_result_shuttle(payload)
+            result_shuttle = self.factory.parse_result_shuttle(payload)
             handle_result_shuttle(result_shuttle)
 
     def handle_new_request(client_id, request_id, operation):
         custom_log('INFO: Handling new Request ... ')
         custom_log('INFO: Running state before applying Operation:')
         output_running_state()
+        self.client_request_count[client_id] += 1
         next_slot = next(self.slot)
         order_statement = self.factory.new_order_statement(operation, next_slot)
         signed_order_statement = serialize_and_sign(order_statement)
@@ -119,11 +136,11 @@ class Replica(process):
             'request_id': request_id,
             'slot': next_slot,
             'operation': operation,
-            'configuration': 'DEFAULT',
+            'configuration': self.current_configuration,
             'order_statements': []
         }
-        # TODO: suspend on invalid operation request?
-        result = apply_operation(operation)
+
+        result = op.apply_operation(self.running_state, operation)
         empty_order_proof = self.factory.OrderProof(**new_order_proof_details)
         order_proof = self.factory.new_order_proof(empty_order_proof, signed_order_statement)
         result_statement = self.factory.new_result_statement(operation, result)
@@ -133,7 +150,7 @@ class Replica(process):
             'request_id': request_id,
             'result': result_statement['result'],
             'operation': operation,
-            'configuration': 'DEFAULT',
+            'configuration': self.current_configuration,
             'result_statements': []
         }
         empty_result_proof = self.factory.ResultProof(**new_result_proof_details)
@@ -147,11 +164,11 @@ class Replica(process):
         forward_request_shuttle(request_shuttle)
         custom_log('INFO: Running state after applying Operation:')
         output_running_state()
+
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
         testutil.persist_state(self.running_state.value, outfile)
 
-    # TODO: check if serialized result can be cached directly
     def handle_retransmission_request(client_id, request_id, operation):
         custom_log('INFO: Retransmission Request, RID:{}, Client: {}'.format(request_id, client_id))
         if (client_id, request_id) in self.result_shuttle_cache:
@@ -162,7 +179,6 @@ class Replica(process):
     def handle_recognized_request(client_id, request_id):
         custom_log('INFO: Handle recognised request ... ')
         req_timeout = self.head_timeout if self.is_head else self.non_head_timeout
-        # TODO: add these to state
         if await(self.result_shuttle_cache[(client_id, request_id)] is not None):
             pass
         elif timeout(req_timeout):
@@ -175,7 +191,7 @@ class Replica(process):
         result_shuttle_payload = serialize_and_sign({'result': result_shuttle.result,
                                                      'result_proof': result_shuttle.result_proof._asdict()})
         custom_log('INFO: Signed Result Shuttle : {}'.format(result_shuttle_payload))
-        respond_to_client(client_id, result_shuttle_payload)
+        send_response_to_client(client_id, result_shuttle_payload)
 
     def handle_unrecognized_request(client_id, request_id, operation):
         if self.is_head:
@@ -187,18 +203,6 @@ class Replica(process):
             forward_request = self.factory.new_forward_request(serialize_and_sign(forward_request_payload))
             forward_to_head(forward_request)
             custom_log('INFO: Forward Request Payload: {}'.format(forward_request_payload))
-
-    # TODO: move to message
-    def parse_request_shuttle(payload):
-        order_proof = self.factory.OrderProof(**payload['order_proof'])
-        result_proof = self.factory.ResultProof(**payload['result_proof'])
-        return self.factory.RequestShuttle(order_proof, result_proof)
-
-    # TODO: move to message
-    def parse_result_shuttle(payload):
-        result = payload['result']
-        result_proof = self.factory.ResultProof(**payload['result_proof'])
-        return self.factory.ResultShuttle(result, result_proof)
 
     def handle_request_shuttle(prev_req_shuttle):
         custom_log('INFO: Replica received a request shuttle ... ')
@@ -215,11 +219,12 @@ class Replica(process):
         custom_log('INFO: Running state before applying Operation:')
         output_running_state()
         client_id, request_id = prev_order_proof.client_id, prev_order_proof.request_id
+        self.request_shuttle_count[client_id] += 1
         operation = prev_order_proof.operation
-        order_statement = self.factory.new_order_statement(prev_order_proof.operation, prev_order_proof.slot)
+        order_statement = self.factory.new_order_statement(operation, prev_order_proof.slot)
         signed_order_statement = serialize_and_sign(order_statement)
         order_proof = self.factory.new_order_proof(prev_order_proof, signed_order_statement)
-        result = apply_operation(operation)
+        result = op.apply_operation(self.running_state, operation)
         result_statement = self.factory.new_result_statement(operation, result)
         signed_result_statement = serialize_and_sign(result_statement)
         result_proof = self.factory.new_result_proof(prev_result_proof, signed_result_statement)
@@ -237,9 +242,10 @@ class Replica(process):
             custom_log('INFO: Replica is a tail. Forwarding result to client. Forwarding result shuttle back in the chain.')
             custom_log('INFO: Signed Result Shuttle: {}'.format(result_shuttle_payload))
             forward_result_shuttle(result_shuttle)
-            respond_to_client(client_id, result_shuttle_payload)
+            send_response_to_client(client_id, result_shuttle_payload)
         custom_log('INFO: Running state after applying Operation:')
         output_running_state()
+
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
         testutil.persist_state(self.running_state.value, outfile)
@@ -249,12 +255,20 @@ class Replica(process):
         result_proof = result_shuttle.result_proof
         custom_log('INFO: Result Shuttle Verified... Caching Result ...')
         client_id, request_id = result_proof.client_id, result_proof.request_id
-        self.result_shuttle_cache[(client_id, request_id)] = result_shuttle
-        result_shuttle_payload = {'result': result_shuttle.result,
-                                  'result_proof': result_shuttle.result_proof._asdict()}
-        result_shuttle = self.factory.new_result_shuttle(serialize_and_sign(result_shuttle_payload))
-        custom_log('INFO: Result shuttle to be forwarded: {}'.format(result_shuttle_payload))
-        forward_result_shuttle(result_shuttle)
+        self.result_shuttle_count[client_id] += 1
+        is_verified = verify_result_statements_sign(result_proof.result_statements)
+        if is_verified:
+            self.result_shuttle_cache[(client_id, request_id)] = result_shuttle
+            result_shuttle_payload = {'result': result_shuttle.result,
+                                      'result_proof': result_shuttle.result_proof._asdict()}
+            result_shuttle = self.factory.new_result_shuttle(serialize_and_sign(result_shuttle_payload))
+            custom_log('INFO: Result shuttle to be forwarded: {}'.format(result_shuttle_payload))
+            forward_result_shuttle(result_shuttle)
+        else:
+            output('Replica {} : Result Proof Verification Failed'.format(self.replica_id, self.replica_id + 1))
+            self.mode = Mode.IMMUTABLE
+            proof_of_misbehaviour = 'Result Proof Verification Failed'
+            send_reconfiguration_request(proof_of_misbehaviour)
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
@@ -282,23 +296,15 @@ class Replica(process):
         reconfig_request = self.factory.new_reconfiguration_request(type_, signed_message)
         send(reconfig_request, to=self.olympus)
 
-    def apply_operation(payload):
-        operation = payload['operation']
-        if operation == 'put':
-            return self.running_state.put(payload['key'], payload['val'])
-        elif operation == 'get':
-            return self.running_state.get(payload['key'])
-        elif operation == 'append':
-            return self.running_state.append(payload['key'], payload['val'])
-        elif operation == 'slice':
-            return self.running_state.slice(payload['key'], payload['slice'])
-            # TODO: handle unrecognized operation?
-
-    def respond_to_client(client_id, result_shuttle):
+    def send_response_to_client(client_id, result_shuttle):
         response = self.factory.new_response(result_shuttle)
         client_process = self.client_processes[client_id]
         send(response, to=client_process)
         custom_log("Responded to client with : {}".format(result_shuttle))
+
+    def send_error_to_client(client_id, error_response):
+        client_process = self.client_processes[client_id]
+        send(error_response, to=client_process)
 
     def verify_order_proof(order_proof):
         slot_number = order_proof.slot
@@ -315,6 +321,14 @@ class Replica(process):
         custom_log('INFO: Order Proof verification True/False: {}'.format(is_order_proof_verified))
         return is_order_proof_verified
 
+    def verify_result_statements_sign(signed_result_statements):
+        for i, signed_result_statement in enumerate(signed_result_statements):
+            rep_id = i + 1
+            is_verified, result_statement = self.signature.verify_replica(rep_id, signed_result_statement)
+            if not is_verified:
+                return False
+        return True
+
     def output_running_state():
         output('Replica: {} INFO: Running State: {}'.format(self.replica_id, self.running_state))
 
@@ -325,3 +339,25 @@ class Replica(process):
 
     def custom_log(log_message):
         output('Replica: {} {}'.format(self.replica_id, log_message))
+
+    def failure_injection(type_=None):
+        # For Test Cases
+        if self.config['test_case'] == 2:
+            output('Replica {} : Failure Injection: Sleep'.format(self.replica_id))
+            time.sleep(10)
+        if self.config['test_case'] == 4:
+            output('Replica {} : Failure Injection: Become Immutable'.format(self.replica_id))
+            self.mode = Mode.IMMUTABLE
+
+        # For Explicit Failure Injections
+        # def change_operation():
+        #     return op.new_get_operation('x')
+        #
+        # def change_result():
+        #     return 'OK'
+        # if False:
+        #     if type_ == 'change_operation':
+        #         output('Replica {} : Failure Injection: Change Operation to get(\'x\')'.format(self.replica_id))
+        #         return change_operation()
+        #     elif type_ == 'change_result':
+        #         return change_result()

@@ -57,6 +57,13 @@ class Client(process):
                 custom_log(
                     'INFO: Dropping Duplicate Response from Replica: {}, Payload: {}'.format(replica_id, payload))
 
+    def receive(msg=('error', payload)):
+        replica_id, signed_payload = payload['replica_id'], payload['payload']
+        is_verified, payload = self.signature.verify_replica(replica_id, signed_payload)
+        if is_verified:
+            custom_log('INFO: Error Response from Replica: {}, Payload: {}'.format(replica_id, payload))
+            handle_error_response(payload)
+
     def handle_response(payload):
         result, result_proof = payload['result'], payload['result_proof']
         is_verified = verify_result_proof(result, result_proof)
@@ -65,13 +72,17 @@ class Client(process):
         else:
             custom_log('INFO: Response Rejected, Result Proof Verification Failed')
 
+    def handle_error_response(payload):
+        custom_log('INFO: Request New Configuration from Olympus')
+
     def send_request(operation, receiver):
         serialized_payload = serialize_and_sign(operation)
         request = self.factory.new_request(serialized_payload)
         request_id = request[1]['request_id']
         self.pending_requests.add(request_id)
         send(request, to=receiver)
-        custom_log('INFO: Sending Request, RequestID: {}, Receiver: {}, Operation: {}'.format(request_id, receiver, operation))
+        custom_log(
+            'INFO: Sending Request, RequestID: {}, Receiver: {}, Operation: {}'.format(request_id, receiver, operation))
         if await(request_id not in self.pending_requests):
             pass
         elif timeout(self.request_timeout):
@@ -126,23 +137,12 @@ class Client(process):
     # FOR DEMO PURPOSES
     def demo():
         verification_running_state = State()
-        def apply_operation(state, payload):
-            operation = payload['operation']
-            if operation == 'put':
-                return state.put(payload['key'], payload['val'])
-            elif operation == 'get':
-                return state.get(payload['key'])
-            elif operation == 'append':
-                return state.append(payload['key'], payload['val'])
-            elif operation == 'slice':
-                return state.slice(payload['key'], payload['slice'])
 
         def regular_client_workflow():
-            # TODO: move to operation
-                    # TODO: handle unrecognized operation?
             client_workloads = config['client_workload'][self.client_id]
+            custom_log('INFO: Client Workload Operations: {}'.format(client_workloads))
             for operation in client_workloads:
-                apply_operation(verification_running_state, operation)
+                op.apply_operation(verification_running_state, operation)
                 send_request(operation, self.head)
             outfile = 'client_state_{}.json'.format(self.client_id)
             testutil.persist_state(verification_running_state.value, outfile)
@@ -150,23 +150,31 @@ class Client(process):
         def demo_forward_requests():
             custom_log('INFO: Demoing Forwarding Request: Sending New Request to Nonhead Replica')
             operation = op.new_put_operation('movie', 'inception')
-            apply_operation(verification_running_state, operation)
+            op.apply_operation(verification_running_state, operation)
             non_head_replica = self.replica_processes[2]
             send_request(operation, non_head_replica)
             outfile = 'client_state_{}.json'.format(self.client_id)
             testutil.persist_state(verification_running_state.value, outfile)
 
+        def demo_error_response():
+            dummy_request_id = 98374982
+            operation = op.new_put_operation('dummy', 'dummy')
+            retransmit_request(dummy_request_id, operation)
+
         custom_log('INFO: Starting DEMO')
         test_case = self.config['test_case']
         if test_case == 1:
-            custom_log('INFO: Executing Test Case: 1(Single Client)')
+            custom_log('INFO: Executing Test Case: 1')
             regular_client_workflow()
         if test_case == 2:
-            custom_log('INFO: Executing Test Case: 2(Multiple Client)')
+            custom_log('INFO: Executing Test Case: 2')
             regular_client_workflow()
         elif test_case == 3:
-            custom_log('INFO: Executing Test Case: 3(Single Client: Forward Request)')
+            custom_log('INFO: Executing Test Case: 3')
             demo_forward_requests()
+        elif test_case == 4:
+            custom_log('INFO: Executing Test Case: 4')
+            demo_error_response()
 
     def custom_log(log_message):
         output('Client: {} {}'.format(self.client_id, log_message))

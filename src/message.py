@@ -75,13 +75,12 @@ class Message:
     def new_order_proof(self, previous_order_proof, new_order_statement):
         order_statements = previous_order_proof.order_statements + [new_order_statement]
 
-        # TODO: figure out serializing named tuple
         order_proof = {
             'client_id': previous_order_proof.client_id,
             'request_id': previous_order_proof.request_id,
             'slot': previous_order_proof.slot,
             'operation': previous_order_proof.operation,
-            'configuration': 'DEFAULT',
+            'configuration': previous_order_proof.configuration,
             'order_statements': order_statements
         }
         return order_proof
@@ -98,13 +97,22 @@ class Message:
     def new_result_proof(self, previous_result_proof, new_result_statement):
         result_statements = previous_result_proof.result_statements + [new_result_statement]
 
-        # TODO: figure out serializing named tuple
         result_proof = {
             'client_id': previous_result_proof.client_id,
             'request_id': previous_result_proof.request_id,
             'result': previous_result_proof.result,
             'operation': previous_result_proof.operation,
-            'configuration': 'DEFAULT',
+            'configuration': previous_result_proof.configuration,
             'result_statements': result_statements
         }
         return result_proof
+
+    def parse_request_shuttle(self, payload):
+        order_proof = self.OrderProof(**payload['order_proof'])
+        result_proof = self.ResultProof(**payload['result_proof'])
+        return self.RequestShuttle(order_proof, result_proof)
+
+    def parse_result_shuttle(self, payload):
+        result = payload['result']
+        result_proof = self.ResultProof(**payload['result_proof'])
+        return self.ResultShuttle(result, result_proof)
