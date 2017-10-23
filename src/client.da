@@ -57,6 +57,17 @@ class Client(process):
                 custom_log(
                     'INFO: Dropping Duplicate Response from Replica: {}, Payload: {}'.format(replica_id, payload))
 
+    def receive(msg=('error', payload)):
+        replica_id, signed_payload = payload['replica_id'], payload['payload']
+        is_verified, payload = self.signature.verify_replica(replica_id, signed_payload)
+        if is_verified:
+            custom_log('INFO: Error Response from Replica: {}, Payload: {}'.format(replica_id, payload))
+            result_proof = payload['result_proof']
+            request_id = result_proof['request_id']
+            if request_id in self.pending_requests:
+                handle_error_response(payload)
+                self.pending_requests.remove(request_id)
+
     def handle_response(payload):
         result, result_proof = payload['result'], payload['result_proof']
         is_verified = verify_result_proof(result, result_proof)
@@ -65,13 +76,17 @@ class Client(process):
         else:
             custom_log('INFO: Response Rejected, Result Proof Verification Failed')
 
+    def handle_error_response(payload):
+        custom_log('INFO: Request New Configuration from Olympus')
+
     def send_request(operation, receiver):
         serialized_payload = serialize_and_sign(operation)
         request = self.factory.new_request(serialized_payload)
         request_id = request[1]['request_id']
         self.pending_requests.add(request_id)
         send(request, to=receiver)
-        custom_log('INFO: Sending Request, RequestID: {}, Receiver: {}, Operation: {}'.format(request_id, receiver, operation))
+        custom_log(
+            'INFO: Sending Request, RequestID: {}, Receiver: {}, Operation: {}'.format(request_id, receiver, operation))
         if await(request_id not in self.pending_requests):
             pass
         elif timeout(self.request_timeout):
@@ -126,6 +141,7 @@ class Client(process):
     # FOR DEMO PURPOSES
     def demo():
         verification_running_state = State()
+
         def apply_operation(state, payload):
             operation = payload['operation']
             if operation == 'put':
@@ -138,8 +154,6 @@ class Client(process):
                 return state.slice(payload['key'], payload['slice'])
 
         def regular_client_workflow():
-            # TODO: move to operation
-                    # TODO: handle unrecognized operation?
             client_workloads = config['client_workload'][self.client_id]
             for operation in client_workloads:
                 apply_operation(verification_running_state, operation)
