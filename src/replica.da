@@ -85,7 +85,7 @@ class Replica(process):
             output('Replica {} : Received Client: {} Retransmission Request, Payload: {}'.format(self.replica_id,
                                                                                                  client_id, operation))
             if self.mode == Mode.IMMUTABLE:
-                error = 'Proof of Misbehaviour'
+                error = 'ERROR'
                 error_response = self.factory.new_error_response(serialize_and_sign(error))
                 respond_to_client(client_id, error_response)
             else:
@@ -174,7 +174,7 @@ class Replica(process):
         is_verified = verify_order_proof(prev_order_proof)
         next_slot = next(self.slot)
         if not is_verified or prev_order_proof.slot != next_slot:
-            output('Proof of Misbehaviour')
+            output('Replica {} : Proof of Misbehaviour: Slot Hole'.format(self.replica_id))
             proof_of_misbehaviour = 'Signature Verification Failed or Slot Hole found'
             self.mode = Mode.IMMUTABLE
             send_reconfiguration_request(proof_of_misbehaviour)
@@ -207,11 +207,18 @@ class Replica(process):
     def handle_result_shuttle(result_shuttle):
         result_proof = result_shuttle.result_proof
         client_id, request_id = result_proof.client_id, result_proof.request_id
-        self.result_shuttle_cache[(client_id, request_id)] = result_shuttle
-        result_shuttle_payload = {'result': result_shuttle.result,
-                                  'result_proof': result_shuttle.result_proof._asdict()}
-        result_shuttle = self.factory.new_result_shuttle(serialize_and_sign(result_shuttle_payload))
-        forward_result_shuttle(result_shuttle)
+        is_verified = verify_result_statements_sign(result_proof.result_statements)
+        if is_verified:
+            self.result_shuttle_cache[(client_id, request_id)] = result_shuttle
+            result_shuttle_payload = {'result': result_shuttle.result,
+                                      'result_proof': result_shuttle.result_proof._asdict()}
+            result_shuttle = self.factory.new_result_shuttle(serialize_and_sign(result_shuttle_payload))
+            forward_result_shuttle(result_shuttle)
+        else:
+            output('Replica {} : Result Proof Verification Failed'.format(self.replica_id, self.replica_id + 1))
+            self.mode = Mode.IMMUTABLE
+            proof_of_misbehaviour = 'Result Proof Verification Failed'
+            send_reconfiguration_request(proof_of_misbehaviour)
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
@@ -249,7 +256,6 @@ class Replica(process):
             return self.running_state.append(payload['key'], payload['val'])
         elif operation == 'slice':
             return self.running_state.slice(payload['key'], payload['slice'])
-            # TODO: handle unrecognized operation?
 
     def respond_to_client(client_id, result_shuttle):
         response = self.factory.new_response(result_shuttle)
@@ -270,6 +276,14 @@ class Replica(process):
                 is_order_proof_verified = False
                 break
         return is_order_proof_verified
+
+    def verify_result_statements_sign(signed_result_statements):
+        for i, signed_result_statement in enumerate(signed_result_statements):
+            rep_id = i + 1
+            is_verified, result_statement = self.signature.verify_replica(rep_id, signed_result_statement)
+            if not is_verified:
+                return False
+        return True
 
     def output_running_state():
         output('Replica {} : Running State: {}'.format(self.replica_id, self.running_state))

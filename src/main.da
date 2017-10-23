@@ -41,7 +41,7 @@ def main():
     olympus_sk = signature.generate_olympus_keys()
     configuration['olympus_singing_key'] = olympus_sk
 
-    config(channel='reliable')
+    config(channel={reliable, fifo})
     # Setup Processes
 
     # Setup Clients
