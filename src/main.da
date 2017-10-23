@@ -32,6 +32,7 @@ def main():
     # Generate Workloads for clients
     configuration['client_workload'] = testutil.parse_client_workloads(configuration)
     configuration['failure_scenarios'] = testutil.parse_failure_scenarios(configuration)
+    output('Failure Scenarios: ', configuration['failure_scenarios'])
 
     # Setup Keys
     signature = Signature()

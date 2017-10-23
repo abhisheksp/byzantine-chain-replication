@@ -119,6 +119,10 @@ class Replica(process):
 
     def handle_new_request(client_id, request_id, operation):
         self.client_request_count[client_id] += 1
+        request_count = self.client_request_count[client_id]
+        if (client_id, request_count, 'client_request', 'change_operation') in self.failures:
+            output('Replica {} : Changing Operation, Client: {} Message: {}'.format(self.replica_id, client_id, request_count))
+            operation = testutil.change_operation()
         next_slot = next(self.slot)
         order_statement = self.factory.new_order_statement(operation, next_slot)
         signed_order_statement = serialize_and_sign(order_statement)
@@ -132,6 +136,10 @@ class Replica(process):
         }
 
         result = op.apply_operation(self.running_state, operation)
+
+        if (client_id, request_count, 'client_request', 'change_result') in self.failures:
+            output('Replica {} : Changing Result, Client: {} Message: {}'.format(self.replica_id, client_id, request_count))
+            result = testutil.change_result()
         empty_order_proof = self.factory.OrderProof(**new_order_proof_details)
         order_proof = self.factory.new_order_proof(empty_order_proof, signed_order_statement)
         result_statement = self.factory.new_result_statement(operation, result)
@@ -146,6 +154,9 @@ class Replica(process):
         }
         empty_result_proof = self.factory.ResultProof(**new_result_proof_details)
         result_proof = self.factory.new_result_proof(empty_result_proof, signed_result_statement)
+        if (client_id, request_count, 'client_request', 'drop_result_stmt') in self.failures:
+            output('Replica {} : Dropping Result Stmt, Client: {} Message: {}'.format(self.replica_id, client_id, request_count))
+            result_proof = testutil.drop_result_stmt(result_proof)
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
         self.result_shuttle_cache[(client_id, request_id)] = None

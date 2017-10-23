@@ -92,9 +92,22 @@ def parse_failure_scenarios(config):
         if k.startswith('failures'):
             configuration = int(k[k.find('[') + 1])
             replica = int(k[k.find(']') - 1]) + 1
-            failures = {}
+            failures = set()
             for trigger_failure in v.split('; '):
                 c, m, trigger_type, failure = parse_trigger_failure(trigger_failure)
-                failures[(c, m, trigger_type)] = failure
+                failures.add((c, m, trigger_type, failure))
             replica_failures[(configuration, replica)] = failures
     return replica_failures
+
+
+def change_operation():
+    return operation.new_get_operation('x')
+
+
+def change_result():
+    return 'OK'
+
+
+def drop_result_stmt(result_proof):
+    result_proof['result_statements'] = result_proof['result_statements'][1:]
+    return result_proof
