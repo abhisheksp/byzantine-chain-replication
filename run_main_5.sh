@@ -7,4 +7,4 @@ python -m da.compiler client.da
 python -m da.compiler replica.da
 python -m da.compiler olympus.da
 python -m da.compiler main.da
-python -m da -n MainNode --master  --logfile --logfilename ../logs/main.log --logfilelevel info --message-buffer-size 100000 main.da -c failure_injection.txt
+python -m da -n MainNode --master  --logfile --logfilename ../logs/main.log --logfilelevel info --message-buffer-size 100000 main.da -c order_proof_verification.txt

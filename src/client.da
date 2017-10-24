@@ -107,6 +107,7 @@ class Client(process):
 
     def verify_result_proof(result, result_proof):
         custom_log('INFO: Verifying Result and Result Proof ...')
+
         def verify_result_statements_sign(signed_result_statements):
             result_statements = []
             for i, signed_result_statement in enumerate(signed_result_statements):
@@ -164,11 +165,6 @@ class Client(process):
             custom_log('INFO: Sending Single Retransmission Request to Replica 2')
             send(request, to=non_head_replica)
 
-        def demo_error_response():
-            dummy_request_id = 98374982
-            operation = op.new_put_operation('dummy', 'dummy')
-            retransmit_request(dummy_request_id, operation)
-
         custom_log('INFO: Starting DEMO')
         test_case = self.config.get('test_case', 0)
         if test_case == 1:
@@ -180,9 +176,6 @@ class Client(process):
         elif test_case == 3:
             custom_log('INFO: Executing Test Case: 3')
             demo_forward_requests()
-        elif test_case == 4:
-            custom_log('INFO: Executing Test Case: 4')
-            demo_error_response()
         else:
             regular_client_workflow()
 
