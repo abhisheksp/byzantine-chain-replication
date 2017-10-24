@@ -53,7 +53,6 @@ class Replica(process):
         self.prev_replica = None if self.is_head else self.replica_processes[self.replica_id - 1]
 
     def receive(msg=('request', payload)):
-        failure_injection()
         if self.is_head:
             client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
             is_verified, operation = self.signature.verify_client(client_id, signed_payload)
@@ -66,7 +65,6 @@ class Replica(process):
                 custom_log('INFO: Not Verified Client {} Request'.format(client_id))
 
     def receive(msg=('forward_request', payload)):
-        failure_injection()
         if self.is_head:
             custom_log('INFO: Replica is Head')
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
@@ -94,7 +92,6 @@ class Replica(process):
                     handle_new_request(client_id, request_id, operation)
 
     def receive(msg=('request_shuttle', payload)):
-        failure_injection()
         if not self.is_head:
             # TODO: sender_replica_id required?
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
@@ -107,7 +104,6 @@ class Replica(process):
                 handle_request_shuttle(prev_req_shuttle)
 
     def receive(msg=('retransmission', payload)):
-        failure_injection()
         client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
         is_verified, operation = self.signature.verify_client(client_id, signed_payload)
         custom_log('INFO: Received Client: {} Retransmission Request, Payload: {}'.format(
@@ -125,7 +121,6 @@ class Replica(process):
                 handle_retransmission_request(client_id, request_id, operation)
 
     def receive(msg=('result_shuttle', payload)):
-        failure_injection()
         sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
         is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
         custom_log('INFO: Received Result Shuttle from Replica: {}, Payload: {}'.format(
@@ -356,6 +351,7 @@ class Replica(process):
         send(reconfig_request, to=self.olympus)
 
     def send_response_to_client(client_id, result_shuttle):
+        failure_injection()
         response = self.factory.new_response(result_shuttle)
         client_process = self.client_processes[client_id]
         send(response, to=client_process)
@@ -405,6 +401,7 @@ class Replica(process):
         # For Explicit Test Cases
         test_case = self.config.get('test_case', 0)
         if test_case == 2:
-            output('Replica {} : Failure Injection: Sleep'.format(self.replica_id))
-            time.sleep(10)
+            if self.is_tail:
+                output('Replica {} : Failure Injection: Sleep at Head'.format(self.replica_id))
+                time.sleep(5)
         return None
