@@ -1,74 +1,116 @@
 Test Case 1:
+Scenario:
+A single client, with a pseudorandom workload. No failures are injected. Test cases ensure the following (among other checks):
+1. Olympus must create initial configuration - keys, create, setup, and start processes.
+2. Client sends the request to head and waits for a response
+3. Head assigns slot, signs order statement, result statement and sends the shuttle along the chain.
+4. Replicas must support dictionary operations - put, get, slice, append.
+5. Replica checks for validity of order proof
 
-Scenario: 
-A single client, with a pseudorandom workload . Client sends the request to head and waits for a response.
-Olympus must create initial configuration - keys, create, setup, and start processes.
-Head assigns slot, signs order statement, result statement and sends the shuttle along the chain.
-Replicas must support dictionary operations - put, get, slice, append. Replica checks for validity of order proof
-and adds add signed order statement and signed result statement. Replicas must handle result shuttle - validate, save,
-and forward it. Client checks signatures and hashes in result proof. Client checks if the dictionary contains
-expected content after receiving the response. Tail sends result to client, and sends result shuttle to predecessor.
+Client Request: pseudorandom(233,20)
+Failure Scenario: No failures injected
+Commands:
+./run_main_1.sh
+./run_client.sh
+Log File:
+Logs for Client: client.log
+Replica, Configuration and Olympus related logs: main.log
+Programmatic Check:
+run_state_consistency_test.sh
+To check if the local state of the client is same as the response received.
+Outcome: Replica receives a response (a valid result or a an empty result) based on the sequence of operations from the pseudorandom request.
 
-Configuration Filename: single_client_workload.txt
-Commands used: ./run_main1.sh
-> cd project_root
-> ./run_main1.sh
-> (new terminal session with project root as current working directory)
-> ./run_client.sh
-Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
-Programmatic check: Check for state consistency by maintaining a local state copy at replica
-Commands: >./run_state_consistency_test.sh
-Outcome: Success indicates that the "verification" state copy at client is consistent with all the replicas, Failure indicates otherwise.
 
 Test Case 2:
 Scenario:
-Multiple clients, with sequence of workload as specified in the config file.
-Check if request sequence is generated as specified in config file.
-Client must simulate the retransmission described in the paper by sleeping till it times out.
-Check if client correctly times out and sends request to all replicas if timely response not received.
-Head should handle the retransmissions as described in the paper (with 3 cases).
-All non-head replicas must send cached result if present.
+Multi-Client Workload. Inject a client Retransmission scenario. Check for the following scenario:
+
+1. Multiple clients, with a sequence of workload as specified in the config file.
+2. Check if request sequence is generated as specified in config file.
+3. The client must simulate the retransmission described in the paper by sleeping till it times out.
+4. Check if client correctly times out and sends a request to all replicas if timely response not received.
+5. Head should handle the retransmissions as described in the paper (this showcased across multiple test cases).
+6. All non-head replicas must send cached result if present.
+
+Client Request:
+Client 1 Workload = pseudorandom(233,5)
+Client 2 Workload = put('movie','star'); append('movie',' wars'); get('movie')
+Client 3 Workload = put('jedi,'luke skywalker); slice('jedi','0:4'); get('jedi')
+
+Failure Scenario: Inject Sleep() to tail
+Commands:
+./run_main_2.sh
+./run_client.sh
+Log File:
+Logs for Client: client.log
+Replica, Configuration and Olympus related logs: main.log
+
+Outcome: Client times out after not receiving the request. Client retransmits the request. Retransmission is successfully processed. The client receives the response.
 
 
-Configuration Filename: multiple_client_workload.txt
-Commands used:
-> cd project_root
-> ./run_main2.sh
-> (new terminal session with project root as current working directory)
-> ./run_client.sh
-Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
-Additional Requirements: Check logs manually to verify each event.
-
-
-<REMOVED, USE CONTENT FOR TEST 8>
 Test Case 3:
 Scenario:
-All Non Head replicas send forward requests to head on receiving unrecognized retransmission request.
+Single Client Workload. The client sends a single retransmission request to a non-head replica. Replica sends a forward request to head.
+A change_operation() failure is injected with the trigger: forwarded_request(0,0). The state consistency check fails.
 
-Configuration Filename: forward_request.txt
-Commands used:
-> cd project_root
-> ./run_main2.sh
-> (new terminal session with project root as current working directory)
-> ./run_client.sh
-Log Filename: main.log(Main Process, Olympus, and Replica) and client.log(Client)
-Additional Requirements: Check logs manually to verify each event.
+Client Request:
+Client 1 - put('movie','star'); append('non_existent_key',' wars'); get('movie')
 
-TEST 6:
-Result Proof verification
+Failure Scenario: change_operation()
+Commands:
+./run_main_3.sh
+./run_client.sh
+Log File:
+Logs for Client: client.log
+Replica, Configuration and Olympus related logs: main.log
+Programmatic Check:
+run_state_consistency_test.sh
+To check if the local state of the client is same as the response received.
+Outcome: The state consistency check fails, as expected.
 
-Test 7:
-Order Proof Verification
-Immutable - Error
-Reconfigure Request
 
-Test 8:
-Forward Request Operation Change
-Consistency Check Fails
+Test Case 4:
+Scenario:
+Single client workload. Head's result statement from the result proof is omitted for shuttle(0,m) where 0 represents the first client and m is message number.
 
-Stress 1000 - 3 - 10
-Requests - Replicas - Clients
-Various Stress Tests
-stress_1000_3_10.txt
-stress_1000_7_10.txt
-stress_2000_11_1.txt
+Client Request: put('movie','star'); append('movie',' wars'); get('movie')
+Failure Scenario: drop_result_stmt()
+Commands:
+./run_main_4.sh
+./run_client.sh
+Log File:
+Logs for Client: client.log
+Replica, Configuration and Olympus related logs: main.log
+
+Outcome: Result proof verification fails at replica as expected.
+
+
+Test Case 5:
+Scenario:
+Single client workload. Inject a failure for the trigger: shuttle(0,m), where 0 represents the 1st client and m is the message number. Check if order proof verification fails.
+Client Request: put('movie','star'); append('movie',' wars'); get('movie')
+Failure Scenario: change_operation()
+Commands:
+./run_main_5.sh
+./run_client.sh
+Log File:
+Logs for Client: client.log
+Replica, Configuration and Olympus related logs: main.log
+Outcome: Reconfigure request will be raised by the replica.
+
+
+Test Case 6:
+Scenario:
+Stress Test - Carrying out stress tests with:
+(1000 requests, 10 clients, 3 replicas)
+(1000 requests, 10 clients, 7 replicas)
+(2000 requests, 1 client, 11 replicas)
+
+Client Request:
+Failure Scenario:
+Commands:
+Log File:
+Logs for Client: client.log
+Replica, Configuration and Olympus related logs: main.log
+Programmatic Check:
+Outcome: Success: All three cases were handled successfully without crashes.
