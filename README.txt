@@ -30,12 +30,11 @@ Multiple Client Workload
 
 
 Limitations of existing implementation:
-1. When the result shuttle propogates upstream from the tail back to the head, change_operation() and change_result() triggers do not raise reconfigure request.
+1. When the result shuttle propagates upstream from the tail back to the head, change_operation() and change_result() triggers do not raise reconfigure request.
 2. Forward request trigger does not verify failures for change_result() and drop_result_statement(). However, these failures can be detected by the algorithm itself. 
-3. Intermittent error: "Does not resolve names" when running multiple_client_workload. Reason is not yet clear to us.
+3. Heisenbug: WARNING: Caught exception while processing router message from <..>. Happens rarely and not reproducible.
 
-
-CONTRIBUTIONS (not entirely accurate): 
+CONTRIBUTIONS:
 
 Contributions from Abhishek:
 Replica - Handling client request. Signature Verification. Order Proofs, Result Proofs, Order Proof Validation
@@ -65,18 +64,41 @@ MAIN FILES:
 	client.log
 
 /config
-	_____
+    config.txt
+	forward_request_operation_change.txt
+	multiple_client_workload.txt
+	order_proof_verification.txt
+	result_proof_verification.txt
+	single_client_workload.txt
+	stress_1000_3_10.txt
+	stress_1000_7_10.txt
+	stress_2000_11_1.txt
 
-CODE SIZE.  
-Numbers of non-blank non-comment lines of code -
-Algorithm: ___
-Other: ____
-Total:  ____
+CODE SIZE.
+-------------------------------------------------------------------------------
+Language                     files          blank        comment           code
+-------------------------------------------------------------------------------
+Python                          19            222            153            816
+DAL                              4             75              0            611
+Bourne Shell                    15             16              0            122
+Markdown                         1              0              0              2
+-------------------------------------------------------------------------------
+SUM:                            39            313            153           1551
+-------------------------------------------------------------------------------
+
+Numbers of non-blank non-comment lines of code - 1551
+Algorithm: 434
+Other: 1117
+Total:  1551
+
 
 
 LANGUAGE FEATURE USAGE. 
 Count of
-List comprehensions (Python): ______
-Dictionary comprehensions (Python): ________
-Set comprehensions (DistAlgo): ________
-Aggregations and quantifications (DistAlgo): ______
+List comprehensions: 0
+Map(Alternative to List comprehension): 7
+Lambdas: 7
+Dictionary comprehensions: 4
+Set comprehensions: 0
+Aggregations: 0
+Quantifications: 2

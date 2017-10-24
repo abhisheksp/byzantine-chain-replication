@@ -4,7 +4,6 @@ replica = import_da('replica')
 class Olympus(process):
     def setup(client_processes, signature, config):
         self.signing_key = config['olympus_singing_key']
-        # self.verifying_key = config['olympus_verifying_key']
         self.replica_count = config['replica_count']
         custom_log('INFO: Olympus setup finished ...')
 
