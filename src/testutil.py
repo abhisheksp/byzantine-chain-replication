@@ -7,7 +7,6 @@ import operation
 
 
 def persist_state(state, outfile):
-    # TODO: refactor
     parent_dir = os.path.abspath(os.pardir)
     logs_dir = 'logs'
     full_path = os.path.join(parent_dir, logs_dir, outfile)

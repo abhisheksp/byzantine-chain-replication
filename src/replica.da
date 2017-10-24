@@ -17,7 +17,7 @@ class Replica(process):
         self.factory = Message(self.replica_id)
         self.sign = lambda x: signing_key.sign(x)
         self.replica_processes = None
-        self.is_head = self.replica_id == 1  # TODO: extract constant
+        self.is_head = self.replica_id == 1
         self.is_tail = self.replica_id == self.config['replica_count']
         self.head = None
         self.next_replica = None
@@ -47,7 +47,6 @@ class Replica(process):
         failure_injection()
         self.olympus = payload['olympus']
         self.replica_processes = payload['replicas']
-        # TODO: Extract Head Tail constant
         self.head = self.replica_processes[1]
         self.next_replica = None if self.is_tail else self.replica_processes[self.replica_id + 1]
         self.prev_replica = None if self.is_head else self.replica_processes[self.replica_id - 1]
@@ -93,7 +92,6 @@ class Replica(process):
 
     def receive(msg=('request_shuttle', payload)):
         if not self.is_head:
-            # TODO: sender_replica_id required?
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
             if is_verified:

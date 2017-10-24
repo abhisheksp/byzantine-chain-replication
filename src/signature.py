@@ -34,7 +34,6 @@ class Signature:
         self.olympus_verify_key = verify_key
         return sign_key
 
-    # TODO: refactor
     def verify_replica(self, replica_id, signed_payload):
         try:
             if replica_id in self.replica_verify_keys:
@@ -50,7 +49,7 @@ class Signature:
             if client_id in self.client_verify_keys:
                 serialized_payload = self.client_verify_keys[client_id].verify(signed_payload)
                 deserialized_payload = pickle.loads(serialized_payload)
-                return True, deserialized_payload  # TODO: fix naming inconsistency
+                return True, deserialized_payload
             return False, None
         except nacl.exceptions.BadSignatureError:
             return False, None
