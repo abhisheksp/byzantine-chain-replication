@@ -60,7 +60,6 @@ def main():
     output('INFO: Setting Up Olympus ...')
     olympus_process = new(olympus.Olympus, args=(client_processes, signature, configuration))
 
-
     # Start Processes
     client_processes_set = set(client_processes.values())
     start(client_processes_set)
