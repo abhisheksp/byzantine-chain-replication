@@ -403,7 +403,8 @@ class Replica(process):
 
     def failure_injection(type_=None):
         # For Explicit Test Cases
-        if self.config['test_case'] == 2:
+        test_case = self.config.get('test_case', 0)
+        if test_case == 2:
             output('Replica {} : Failure Injection: Sleep'.format(self.replica_id))
             time.sleep(10)
         return None
