@@ -84,7 +84,7 @@ class Replica(process):
                     operation = testutil.change_operation()
                 output_cache()
                 if (client_id, request_id) in self.result_shuttle_cache:
-                    custom_log('INFO: Result found in Cache!')
+                    custom_log('INFO: Checking if Result present in Cache ...')
                     handle_recognized_request(client_id, request_id)
                 else:
                     custom_log('INFO: Head does not recognize this operation...')
@@ -198,14 +198,14 @@ class Replica(process):
     def handle_retransmission_request(client_id, request_id, operation):
         custom_log('INFO: Retransmission Request, RID:{}, Client: {}'.format(request_id, client_id))
         if (client_id, request_id) in self.result_shuttle_cache:
-            custom_log('INFO: Result found in Cache!')
+            custom_log('INFO: Checking if Result present in Cache ...')
             handle_recognized_request(client_id, request_id)
         else:
             custom_log('INFO: Result was not recognized. Forwarding request to head (case 2 and/or 3 in the paper)... ')
             handle_unrecognized_request(client_id, request_id, operation)
 
     def handle_recognized_request(client_id, request_id):
-        custom_log('INFO: Handle recognised request ... ')
+        custom_log('INFO: Handle recognised request ...')
         req_timeout = self.head_timeout if self.is_head else self.non_head_timeout
         if await(self.result_shuttle_cache[(client_id, request_id)] is not None):
             pass
