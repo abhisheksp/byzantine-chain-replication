@@ -54,8 +54,8 @@ class Client(process):
                 handle_response(payload)
                 self.pending_requests.remove(request_id)
             else:
-                custom_log(
-                    'INFO: Dropping Duplicate Response from Replica: {}, Payload: {}'.format(replica_id, payload))
+                log_msg = 'INFO: Dropping Duplicate Response from Replica: {}, Payload: {}'
+                custom_log(log_msg.format(replica_id, payload))
 
     def receive(msg=('error', payload)):
         replica_id, signed_payload = payload['replica_id'], payload['payload']
@@ -83,8 +83,8 @@ class Client(process):
         request_id = request[1]['request_id']
         self.pending_requests.add(request_id)
         send(request, to=receiver)
-        custom_log(
-            'INFO: Sending Request, RequestID: {}, Receiver: {}, Operation: {}'.format(request_id, receiver, operation))
+        log_msg = 'INFO: Sending Request, RequestID: {}, Receiver: {}, Operation: {}'
+        custom_log(log_msg.format(request_id, receiver, operation))
         if await(request_id not in self.pending_requests):
             pass
         elif timeout(self.request_timeout):
