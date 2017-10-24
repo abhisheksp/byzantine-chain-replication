@@ -60,6 +60,7 @@ class Replica(process):
             if is_verified:
                 custom_log('INFO: Received Client {} Request, Payload: {}'.format(client_id,
                                                                                   operation))
+                custom_log('INFO: Client Signature Verification Successful!')
                 handle_new_request(client_id, request_id, operation)
             else:
                 custom_log('INFO: Not Verified Client {} Request'.format(client_id))
@@ -67,9 +68,11 @@ class Replica(process):
     def receive(msg=('forward_request', payload)):
         failure_injection()
         if self.is_head:
+            custom_log('INFO: Replica is Head')
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
             if is_verified:
+                custom_log('INFO: Head Verification of the forwarded request complete.')
                 client_id, request_id = payload['client_id'], payload['request_id']
                 custom_log('INFO: Received Forward Request from Replica {}, Client: {} RequestID: {}'.format(
                     sender_replica_id, client_id, request_id))
@@ -83,8 +86,11 @@ class Replica(process):
                     operation = testutil.change_operation()
                 output_cache()
                 if (client_id, request_id) in self.result_shuttle_cache:
+                    custom_log('INFO: Result found in Cache!')
                     handle_recognized_request(client_id, request_id)
                 else:
+                    custom_log('INFO: Head does not recognize this operation...')
+                    custom_log('INFO: Head treats this as a new request (case 3 of the paper) ...')
                     handle_new_request(client_id, request_id, operation)
 
     def receive(msg=('request_shuttle', payload)):
@@ -94,7 +100,7 @@ class Replica(process):
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
             if is_verified:
-                custom_log('INFO: Orderstatement and Shuttle signature verification successful')
+                custom_log('INFO: OrderStatement and Shuttle signature verification successful')
                 custom_log('INFO: Received Request Shuttle from Replica {}, Payload: {}'.format(
                     sender_replica_id, payload))
                 prev_req_shuttle = self.factory.parse_request_shuttle(payload)
@@ -104,14 +110,13 @@ class Replica(process):
         failure_injection()
         client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
         is_verified, operation = self.signature.verify_client(client_id, signed_payload)
-        if is_verified:
-
-            custom_log('INFO: Received Client: {} Retransmission Request, Payload: {}'.format(
+        custom_log('INFO: Received Client: {} Retransmission Request, Payload: {}'.format(
                 client_id, operation))
-            custom_log('INFO: Client request signature verification successful')
+        if is_verified:
+            custom_log('INFO: Client request signature verification successful!')
             if self.mode == Mode.IMMUTABLE:
-                custom_log('INFO: Replica Immutable. Sending Error to Client...')
-                error = 'ERROR'
+                custom_log('INFO: Replica Immutable. Sending Error to Client !')
+                error = 'ERROR - SERVER IS RECONFIGURING ...'
                 error_response = self.factory.new_error_response(serialize_and_sign(error))
                 custom_log('INFO: {}'.format(error_response))
                 send_error_to_client(client_id, error_response)
@@ -123,15 +128,15 @@ class Replica(process):
         failure_injection()
         sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
         is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
+        custom_log('INFO: Received Result Shuttle from Replica: {}, Payload: {}'.format(
+                sender_replica_id, payload))
         if is_verified:
             custom_log('INFO: Result shuttle signature verification successful')
-            custom_log('INFO: Received Result Shuttle from Replica: {}, Payload: {}'.format(
-                sender_replica_id, payload))
             result_shuttle = self.factory.parse_result_shuttle(payload)
             handle_result_shuttle(result_shuttle)
 
     def handle_new_request(client_id, request_id, operation):
-        custom_log('INFO: Handling new Request ... ')
+        custom_log('INFO: Handling New Request ... ')
         custom_log('INFO: Running state before applying Operation:')
         output_running_state()
         self.client_request_count[client_id] += 1
@@ -142,6 +147,7 @@ class Replica(process):
                                                                                                      request_count))
             operation = testutil.change_operation()
         next_slot = next(self.slot)
+        custom_log('INFO: Assigning new slot: {}'.format(next_slot))
         order_statement = self.factory.new_order_statement(operation, next_slot)
         signed_order_statement = serialize_and_sign(order_statement)
         new_order_proof_details = {
@@ -197,8 +203,10 @@ class Replica(process):
     def handle_retransmission_request(client_id, request_id, operation):
         custom_log('INFO: Retransmission Request, RID:{}, Client: {}'.format(request_id, client_id))
         if (client_id, request_id) in self.result_shuttle_cache:
+            custom_log('INFO: Result found in Cache!')
             handle_recognized_request(client_id, request_id)
         else:
+            custom_log('INFO: Result was not recognized. Forwarding request to head (case 2 and/or 3 in the paper)... ')
             handle_unrecognized_request(client_id, request_id, operation)
 
     def handle_recognized_request(client_id, request_id):
@@ -210,6 +218,7 @@ class Replica(process):
             self.mode = Mode.IMMUTABLE
             proof_of_misbehaviour = 'Recognized Request Timed Out'
             custom_log('INFO: Replica timed out after recognizing the request ... Raising reconfigure request ...')
+            custom_log('INFO: Replica changed to IMMUTABLE')
             send_reconfiguration_request(proof_of_misbehaviour)
             return
         result_shuttle = self.result_shuttle_cache[(client_id, request_id)]
@@ -220,7 +229,7 @@ class Replica(process):
 
     def handle_unrecognized_request(client_id, request_id, operation):
         if self.is_head:
-            custom_log('INFO: Head does not recognize the operation. Treating it as new request')
+            custom_log('INFO: Head does not recognize the operation. Treating it as new request ...')
             # Case: New Request
             handle_new_request(client_id, request_id, operation)
         else:
@@ -238,6 +247,7 @@ class Replica(process):
             custom_log('INFO: Verification failed. Replica found a proof of misbehaviour ... ')
             proof_of_misbehaviour = 'Signature Verification Failed or Slot Hole found'
             self.mode = Mode.IMMUTABLE
+            custom_log('INFO: Replica changed to IMMUTABLE')
             send_reconfiguration_request(proof_of_misbehaviour)
         custom_log('INFO: Order statements verification (inside the request shuttle) successful')
         custom_log('INFO: Running state before applying Operation:')
@@ -314,7 +324,7 @@ class Replica(process):
             custom_log('INFO: Result shuttle to be forwarded: {}'.format(result_shuttle_payload))
             forward_result_shuttle(result_shuttle)
         else:
-            output('Replica {} : Result Proof Verification Failed'.format(self.replica_id, self.replica_id + 1))
+            custom_log('INFO: Result Proof Verification Failed !')
             self.mode = Mode.IMMUTABLE
             proof_of_misbehaviour = 'Result Proof Verification Failed'
             send_reconfiguration_request(proof_of_misbehaviour)
@@ -339,7 +349,7 @@ class Replica(process):
         send(forward_request, to=self.head)
 
     def send_reconfiguration_request(proof_of_misbehaviour):
-        custom_log(' Raising Reconfiguration Request')
+        custom_log(' Raising Reconfiguration Request ... ')
         type_ = 'replica'
         signed_message = serialize_and_sign(proof_of_misbehaviour)
         reconfig_request = self.factory.new_reconfiguration_request(type_, signed_message)
@@ -367,7 +377,7 @@ class Replica(process):
             if not is_verified or slot_number != order_stmt['slot'] or operation != order_stmt['operation']:
                 is_order_proof_verified = False
                 break
-        custom_log('INFO: Order Proof verification True/False: {}'.format(is_order_proof_verified))
+        custom_log('INFO: Order Proof verification (True/False): {}'.format(is_order_proof_verified))
         return is_order_proof_verified
 
     def verify_result_statements_sign(signed_result_statements):
@@ -375,7 +385,9 @@ class Replica(process):
             rep_id = i + 1
             is_verified, result_statement = self.signature.verify_replica(rep_id, signed_result_statement)
             if not is_verified:
+                custom_log('INFO: Result statement verification failed !')
                 return False
+        custom_log('INFO: Result Statements Verification Successful')
         return True
 
     def output_running_state():
