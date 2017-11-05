@@ -10,6 +10,7 @@ from slot import Slot
 
 class Replica(process):
     def setup(client_processes, replica_id, signature, config):
+        custom_log('INFO: Setting up Replica {}'.format(self.replica_id))
         self.mode = Mode.ACTIVE
         self.history = []
         self.running_state = config['initial_running_state']

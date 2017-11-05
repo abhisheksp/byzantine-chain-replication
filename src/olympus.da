@@ -10,12 +10,12 @@ class Olympus(process):
     def run():
         replica_processes = {}
         for replica_id in range(1, self.replica_count + 1):
-            replica_process = new(replica.Replica, args=(self.client_processes, replica_id, self.signature, config))
-            replica_processes[replica_id] = replica_process
-            start(replica_process)
+            replica_process = new(replica.Replica, args=(self.client_processes, replica_id, self.signature, config), at='ReplicaNode')
+            replica_processes[replica_id] = replica_process.pop()
 
         client_processes_set = set(self.client_processes.values())
         replica_processes_set = set(replica_processes.values())
+        start(replica_processes_set)
         payload = {'olympus': self, 'replicas': replica_processes}
         send(('new_configuration', payload), to=replica_processes_set)
         send(('new_configuration', payload), to=client_processes_set)
