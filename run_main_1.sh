@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+source clean_containers.sh
 source compile.sh
 rm logs/main.log
 export IP_ADDR=`/sbin/ifconfig docker0 |grep 'inet '| cut -d: -f2 | awk '{print $2}'`

@@ -1,3 +1,7 @@
+import time
+from dockerwrapper import DockerWrapper
+from constants import REPLICA_PORT
+
 replica = import_da('replica')
 client = import_da('client')
 
@@ -6,6 +10,7 @@ class Olympus(process):
     def setup(signature, config):
         self.signing_key = config['olympus_singing_key']
         self.replica_count = config['replica_count']
+        self.docker_wrapper = DockerWrapper()
         custom_log('INFO: Olympus setup finished ...')
 
     def run():
@@ -16,10 +21,25 @@ class Olympus(process):
             client_process = new(client.Client, args=(client_id, self.signature, self.config), at='ClientNode')
             client_processes[client_id] = client_process.pop()
 
+        # Start Replica Node
+        custom_log('INFO: Starting Replica Node')
+        replica_node_id, error = self.docker_wrapper.start('replicanode_img', 'replicanode')
+        if error:
+            custom_log('ERR: {}'.format(error))
+
+        # TODO: use exception pattern
+        replica_node_ip, error = self.docker_wrapper.ip_address(replica_node_id)
+        replica_address = 'ReplicaNode@{}:{}'.format(replica_node_ip, REPLICA_PORT)
+        custom_log('INFO: Waiting for ReplicaNode Setup')
+        time.sleep(10)
+        custom_log('INFO: Replica Node Started at {}'.format(replica_address))
+        if error:
+            custom_log('ERR: Error retrieving Replica Node IP address')
+
         replica_processes = {}
         for replica_id in range(1, self.replica_count + 1):
-            # TODO: infer IP, PORT
-            replica_process = new(replica.Replica, args=(client_processes, replica_id, self.signature, config), at='ReplicaNode@172.17.0.2:9002')
+            replica_process = new(replica.Replica, args=(client_processes, replica_id, self.signature, config),
+                                  at=replica_address)
             replica_processes[replica_id] = replica_process.pop()
 
         client_processes_set = set(client_processes.values())

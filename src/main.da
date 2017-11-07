@@ -34,6 +34,7 @@ def main():
     output('Failure Scenarios: ', configuration['failure_scenarios'])
 
     # Setup Keys
+    # TODO: move to olympus
     signature = Signature()
     output('INFO: Generating keys for clients ...')
     client_sks = signature.generate_client_keys(client_count)
