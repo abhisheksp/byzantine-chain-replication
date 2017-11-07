@@ -7,7 +7,6 @@ import testutil
 import util
 from signature import Signature
 
-client = import_da('client')
 olympus = import_da('olympus')
 
 
@@ -48,19 +47,9 @@ def main():
 
     output('INFO: Channel = Reliable and FIFO')
     config(channel={reliable, fifo})
-    # Setup Processes
-
-    # Setup Clients
-    client_processes = {}
-    for client_id in range(1, client_count + 1):
-        client_process = new(client.Client, args=(client_id, signature, configuration), at='ClientNode')
-        client_processes[client_id] = client_process.pop()
 
     # Setup Olympus
     output('INFO: Setting Up Olympus ...')
-    olympus_process = new(olympus.Olympus, args=(client_processes, signature, configuration))
+    olympus_process = new(olympus.Olympus, args=(signature, configuration), at='OlympusNode')
 
-    # Start Processes
-    client_processes_set = set(client_processes.values())
-    start(client_processes_set)
     start(olympus_process)

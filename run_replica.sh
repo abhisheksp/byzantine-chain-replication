@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 
-source ~/Environments/async36/bin/activate
+source compile.sh
 rm logs/replica.log
 cd src
-python -m da.compiler client.da
-python -m da.compiler replica.da
-python -m da.compiler olympus.da
-python -m da.compiler main.da
-python -m da -n ReplicaNode --logfile --logfilename ../logs/replica.log --logfilelevel info -D --message-buffer-size 100000 main.da
+export IP_ADDR=`/sbin/ifconfig eth0 | grep 'inet addr' | cut -d: -f2 | awk '{print $1}'`
+python -m da -D -n ReplicaNode --message-buffer-size 100000 --hostname $IP_ADDR --port $PORT main.da

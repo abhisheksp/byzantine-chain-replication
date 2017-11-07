@@ -1,21 +1,33 @@
 replica = import_da('replica')
+client = import_da('client')
 
 
 class Olympus(process):
-    def setup(client_processes, signature, config):
+    def setup(signature, config):
         self.signing_key = config['olympus_singing_key']
         self.replica_count = config['replica_count']
         custom_log('INFO: Olympus setup finished ...')
 
     def run():
+        custom_log('INFO: Starting to run Olympus')
+        client_processes = {}
+        client_count = config['num_client']
+        for client_id in range(1, client_count + 1):
+            client_process = new(client.Client, args=(client_id, self.signature, self.config), at='ClientNode')
+            client_processes[client_id] = client_process.pop()
+
         replica_processes = {}
         for replica_id in range(1, self.replica_count + 1):
-            replica_process = new(replica.Replica, args=(self.client_processes, replica_id, self.signature, config), at='ReplicaNode')
+            # TODO: infer IP, PORT
+            replica_process = new(replica.Replica, args=(client_processes, replica_id, self.signature, config), at='ReplicaNode@172.17.0.2:9002')
             replica_processes[replica_id] = replica_process.pop()
 
-        client_processes_set = set(self.client_processes.values())
+        client_processes_set = set(client_processes.values())
         replica_processes_set = set(replica_processes.values())
+
+        start(client_processes_set)
         start(replica_processes_set)
+
         payload = {'olympus': self, 'replicas': replica_processes}
         send(('new_configuration', payload), to=replica_processes_set)
         send(('new_configuration', payload), to=client_processes_set)
