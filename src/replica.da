@@ -190,7 +190,8 @@ class Replica(process):
         forward_request_shuttle(request_shuttle)
         custom_log('INFO: Running state after applying Operation:')
         output_running_state()
-
+        custom_log('INFO: CHECKPOINT')
+        initiate_checkpoint_protocol(next_slot, operation)
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
         testutil.persist_state(self.running_state.value, outfile)
@@ -331,6 +332,83 @@ class Replica(process):
             proof_of_misbehaviour = 'Result Proof Verification Failed'
             send_reconfiguration_request(proof_of_misbehaviour)
 
+    def initiate_checkpoint_protocol(slot, operation):
+        if self.is_head:
+            custom_log('INFO: Slot Number is: {}'.format(slot))
+            if slot % 10 == 0:
+                new_checkpoint_proof_details = {
+                'slot': slot,
+                'operation': operation,
+                'configuration': self.current_configuration,
+                'checkpoint_statements': []
+                }
+                empty_checkpoint_proof = self.factory.CheckpointProof(**new_checkpoint_proof_details)
+                replica_running_state = self.running_state
+                signed_running_state = serialize_and_sign(replica_running_state)
+                custom_log('INFO: Head Checkpointing...')
+                checkpoint_proof = self.factory.new_checkpoint_proof(empty_checkpoint_proof, signed_running_state)
+                checkpoint_req_payload = {'checkpoint_proof': checkpoint_proof}
+                checkpoint_request = self.factory.new_checkpoint_request(serialize_and_sign(checkpoint_req_payload))
+                forward_checkpoint_request(checkpoint_request)
+
+    def receive(msg=('checkpoint_shuttle', payload)):
+        custom_log('INFO: Replica Received a CheckPoint Proof')
+        if not self.is_head:
+            sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
+            is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
+            if is_verified:
+                custom_log('INFO: Checkpointproof signature verification successful')
+                log_msg = 'INFO: Received Checkpointproof from Replica {}, Payload: {}'
+                custom_log(log_msg.format(sender_replica_id, payload))
+                prev_checkpoint_proof = self.factory.parse_checkpoint_request(payload)
+                handle_checkpoint_proof(prev_checkpoint_proof)
+
+    def handle_checkpoint_proof(prev_checkpoint_proof):
+        # To-Do: Verification
+        is_verified = verify_checkpoint_proof(prev_checkpoint_proof)
+        if is_verified:
+            custom_log('INFO: Checkpoint Proof Verification Successful')
+            replica_running_state = self.running_state
+            signed_running_state = serialize_and_sign(replica_running_state)
+            checkpoint_proof = self.factory.new_checkpoint_proof(prev_checkpoint_proof, signed_running_state)
+            checkpoint_req_payload = {'checkpoint_proof': checkpoint_proof}
+            checkpoint_request = self.factory.new_checkpoint_request(serialize_and_sign(checkpoint_req_payload))
+            forward_checkpoint_request(checkpoint_request)
+            if self.is_tail:
+                custom_log('INFO: Checkpoint Proof has reached TAIL!')
+                custom_log('INFO: Checkpoint Proof :{}'.format(checkpoint_proof))
+                checkpoint_res_payload = checkpoint_req_payload
+                checkpoint_result = self.factory.new_checkpoint_result(serialize_and_sign(checkpoint_res_payload))
+                forward_checkpoint_result(checkpoint_result)
+
+    def handle_completed_checkpoint_proof(next_checkpoint_proof):
+        if not self.is_tail:
+            checkpoint_res_payload = {'checkpoint_proof': next_checkpoint_proof}
+            checkpoint_result = self.factory.new_checkpoint_result(serialize_and_sign(checkpoint_res_payload))
+            forward_checkpoint_result(checkpoint_result)
+
+    def receive(msg=('checkpoint_result_shuttle', payload)):
+        custom_log('INFO: Replica Received a completed CheckPoint Proof back.')
+        if not self.is_tail:
+            sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
+            is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
+            if is_verified:
+                custom_log('INFO: Completed Checkpointproof signature verification successful')
+                log_msg = 'INFO: Received Completed Checkpointproof from Replica {}, Payload: {}'
+                custom_log(log_msg.format(sender_replica_id, payload))
+                next_checkpoint_proof = payload['checkpoint_proof']
+                handle_completed_checkpoint_proof(next_checkpoint_proof)
+
+    def forward_checkpoint_request(checkpoint_request):
+        if not self.is_tail:
+            custom_log('INFO: Forwarding checkpoint_proof to Replica: {}'.format(self.replica_id + 1))
+            send(checkpoint_request, to=self.next_replica)
+
+    def forward_checkpoint_result(checkpoint_result):
+        if not self.is_head:
+            custom_log('INFO: Forwarding checkpoint_proof back to Replica: {}'.format(self.replica_id -1))
+            send(checkpoint_result, to=self.prev_replica)
+
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
         return self.sign(serialized_payload)
@@ -366,6 +444,11 @@ class Replica(process):
     def send_error_to_client(client_id, error_response):
         client_process = self.client_processes[client_id]
         send(error_response, to=client_process)
+
+    def verify_checkpoint_proof(checkpoint_proof):
+        custom_log('INFO: Checkpoint Proof Verification')
+        #TO DO - Verification logic
+        return True
 
     def verify_order_proof(order_proof):
         slot_number = order_proof.slot

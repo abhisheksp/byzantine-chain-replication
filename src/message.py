@@ -16,17 +16,25 @@ class Message:
     reconfiguration_tag = 'reconfiguration_request'
     request_shuttle_tag = 'request_shuttle'
     result_shuttle_tag = 'result_shuttle'
+    checkpoint_shuttle_tag = 'checkpoint_shuttle'
+    checkpoint_result_shuttle_tag = 'checkpoint_result_shuttle'
     OrderStatement = namedtuple('OrderStatement', 'slot operation replica_id')
     OrderProof = namedtuple(
         'OrderProof',
         'client_id request_id slot operation configuration order_statements'
     )
+    CheckpointProof = namedtuple(
+        'CheckpointProof',
+        'slot operation configuration checkpoint_statements'
+    )
+
     ResultStatement = namedtuple('OrderStatement', 'result operation replica_id')
     ResultProof = namedtuple(
         'ResultProof',
         'client_id request_id result operation configuration result_statements'
     )
     RequestShuttle = namedtuple('RequestShuttle', 'order_proof result_proof signed_operation')
+    CheckPointShuttle =  namedtuple('CheckPointShuttle', 'checkpoint_proof')
     ResultShuttle = namedtuple('ResponseShuttle', 'result result_proof')
 
     def __init__(self, identifier=None):
@@ -68,6 +76,14 @@ class Message:
     def new_request_shuttle(self, payload):
         message_body = {'replica_id': self.identifier, 'payload': payload}
         return self.request_shuttle_tag, message_body
+
+    def new_checkpoint_request(self, payload):
+        message_body = {'replica_id': self.identifier, 'payload': payload}
+        return self.checkpoint_shuttle_tag, message_body
+
+    def new_checkpoint_result(self, payload):
+        message_body = {'replica_id': self.identifier, 'payload': payload}
+        return self.checkpoint_result_shuttle_tag, message_body
 
     def new_result_shuttle(self, payload):
         message_body = {'replica_id': self.identifier, 'payload': payload}
@@ -122,7 +138,21 @@ class Message:
         signed_operation = payload['signed_operation']
         return self.RequestShuttle(order_proof, result_proof, signed_operation)
 
+    def parse_checkpoint_request(self, payload):
+        return self.CheckpointProof(**payload['checkpoint_proof'])
+
     def parse_result_shuttle(self, payload):
         result = payload['result']
         result_proof = self.ResultProof(**payload['result_proof'])
         return self.ResultShuttle(result, result_proof)
+
+    def new_checkpoint_proof(self, prev_checkpoint_proof, signed_running_state):
+        checkpoint_statements = prev_checkpoint_proof.checkpoint_statements + [signed_running_state]
+        checkpoint_proof = {
+            'slot': prev_checkpoint_proof.slot,
+            'operation': prev_checkpoint_proof.operation,
+            'configuration': prev_checkpoint_proof.configuration,
+            'checkpoint_statements': checkpoint_statements
+        }
+        return checkpoint_proof
+
