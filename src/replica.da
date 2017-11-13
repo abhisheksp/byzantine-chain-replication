@@ -335,18 +335,13 @@ class Replica(process):
     def initiate_checkpoint_protocol(slot, operation):
         if self.is_head:
             custom_log('INFO: Slot Number is: {}'.format(slot))
-            if slot % 10 == 0:
-                new_checkpoint_proof_details = {
-                'slot': slot,
-                'operation': operation,
-                'configuration': self.current_configuration,
-                'checkpoint_statements': []
-                }
+            if slot % 8 == 0:
+                new_checkpoint_proof_details = {'checkpoint_statements': [] }
                 empty_checkpoint_proof = self.factory.CheckpointProof(**new_checkpoint_proof_details)
                 replica_running_state = self.running_state
                 signed_running_state = serialize_and_sign(replica_running_state)
                 custom_log('INFO: Head Checkpointing...')
-                checkpoint_proof = self.factory.new_checkpoint_proof(empty_checkpoint_proof, signed_running_state)
+                checkpoint_proof = self.factory.new_checkpoint_proof(empty_checkpoint_proof, signed_running_state, slot)
                 checkpoint_req_payload = {'checkpoint_proof': checkpoint_proof}
                 checkpoint_request = self.factory.new_checkpoint_request(serialize_and_sign(checkpoint_req_payload))
                 forward_checkpoint_request(checkpoint_request)
@@ -370,7 +365,7 @@ class Replica(process):
             custom_log('INFO: Checkpoint Proof Verification Successful')
             replica_running_state = self.running_state
             signed_running_state = serialize_and_sign(replica_running_state)
-            checkpoint_proof = self.factory.new_checkpoint_proof(prev_checkpoint_proof, signed_running_state)
+            checkpoint_proof = self.factory.new_checkpoint_proof(prev_checkpoint_proof, signed_running_state, self.slot.get_slot())
             checkpoint_req_payload = {'checkpoint_proof': checkpoint_proof}
             checkpoint_request = self.factory.new_checkpoint_request(serialize_and_sign(checkpoint_req_payload))
             forward_checkpoint_request(checkpoint_request)
@@ -379,12 +374,14 @@ class Replica(process):
                 custom_log('INFO: Checkpoint Proof :{}'.format(checkpoint_proof))
                 checkpoint_res_payload = checkpoint_req_payload
                 checkpoint_result = self.factory.new_checkpoint_result(serialize_and_sign(checkpoint_res_payload))
+                truncate_history(checkpoint_proof)
                 forward_checkpoint_result(checkpoint_result)
 
     def handle_completed_checkpoint_proof(next_checkpoint_proof):
         if not self.is_tail:
             checkpoint_res_payload = {'checkpoint_proof': next_checkpoint_proof}
             checkpoint_result = self.factory.new_checkpoint_result(serialize_and_sign(checkpoint_res_payload))
+            truncate_history(next_checkpoint_proof)
             forward_checkpoint_result(checkpoint_result)
 
     def receive(msg=('checkpoint_result_shuttle', payload)):
@@ -444,6 +441,20 @@ class Replica(process):
     def send_error_to_client(client_id, error_response):
         client_process = self.client_processes[client_id]
         send(error_response, to=client_process)
+
+    def truncate_history(checkpoint_proof):
+        custom_log('History Before Truncating: {}'.format(self.history))
+        custom_log('INFO: Truncating History ...')
+        # list = [checkpoint['slot'] for checkpoint in checkpoint_proof['checkpoint_statements'] if checkpoint['replica_id'] == self.replica_id]
+        list_of_slots = []
+        for checkpoint in checkpoint_proof['checkpoint_statements']:
+            if checkpoint['replica_id'] == self.replica_id:
+                list_of_slots.append(checkpoint['slot'])
+        if list_of_slots:
+            new_history = [dict for dict in self.history if dict['slot'] > list_of_slots[0]]
+            self.history = new_history
+        custom_log('INFO: History After Truncating: {}'.format(self.history))
+
 
     def verify_checkpoint_proof(checkpoint_proof):
         custom_log('INFO: Checkpoint Proof Verification')

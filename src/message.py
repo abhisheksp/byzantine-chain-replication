@@ -25,7 +25,7 @@ class Message:
     )
     CheckpointProof = namedtuple(
         'CheckpointProof',
-        'slot operation configuration checkpoint_statements'
+        'checkpoint_statements'
     )
 
     ResultStatement = namedtuple('OrderStatement', 'result operation replica_id')
@@ -146,13 +146,13 @@ class Message:
         result_proof = self.ResultProof(**payload['result_proof'])
         return self.ResultShuttle(result, result_proof)
 
-    def new_checkpoint_proof(self, prev_checkpoint_proof, signed_running_state):
-        checkpoint_statements = prev_checkpoint_proof.checkpoint_statements + [signed_running_state]
-        checkpoint_proof = {
-            'slot': prev_checkpoint_proof.slot,
-            'operation': prev_checkpoint_proof.operation,
-            'configuration': prev_checkpoint_proof.configuration,
-            'checkpoint_statements': checkpoint_statements
+    def new_checkpoint_proof(self, prev_checkpoint_proof, signed_running_state, slot):
+        checkpoint_statement = {
+            'replica_id': self.identifier,
+            'slot': slot,
+            'signed_running_state': signed_running_state
         }
+        checkpoint_statements = prev_checkpoint_proof.checkpoint_statements + [checkpoint_statement]
+        checkpoint_proof = {'checkpoint_statements': checkpoint_statements}
         return checkpoint_proof
 

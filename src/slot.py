@@ -6,5 +6,8 @@ class Slot:
         self.value += 1
         return self.value
 
+    def get_slot(self):
+        return self.value
+
     def reset(self):
         self.value = 0
