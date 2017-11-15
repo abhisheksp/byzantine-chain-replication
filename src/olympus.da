@@ -1,5 +1,8 @@
+import pickle
 import time
+
 from dockerwrapper import DockerWrapper
+from message import Message
 from constants import REPLICA_PORT
 
 replica = import_da('replica')
@@ -13,6 +16,9 @@ class Olympus(process):
         self.docker_wrapper = DockerWrapper()
         custom_log('INFO: Olympus setup finished ...')
         self.current_configuration = 0
+        self.replica_processes = None
+        self.client_processes = None
+        self.factory = Message()
 
     def run():
         custom_log('INFO: Starting to run Olympus')
@@ -42,7 +48,7 @@ class Olympus(process):
             replica_process = new(replica.Replica, args=(client_processes, replica_id, self.signature, config),
                                   at=replica_address)
             replica_processes[replica_id] = replica_process.pop()
-
+        self.replica_processes = replica_processes
         client_processes_set = set(client_processes.values())
         replica_processes_set = set(replica_processes.values())
 
@@ -61,6 +67,25 @@ class Olympus(process):
 
     def receive(msg=('reconfiguration_request', payload)):
         output('Reconfiguration Request Raised')
+
+    def receive(msg=('configuration_request', payload)):
+        client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
+        is_verified, operation = self.signature.verify_client(client_id, signed_payload)
+        if is_verified:
+            custom_log('INFO: Received Client {} Request, Payload: {}'.format(client_id, operation))
+            custom_log('INFO: Client Signature Verification Successful!')
+            # TODO: add configuration failure injection
+            payload = {
+                'olympus': self,
+                'replicas': self.replica_processes,
+                'configuration': self.current_configuration,
+                'majority_count': (self.replica_count // 2) + 1
+            }
+
+            response = self.factory.new_configuration_response(payload)
+            send(response, to=self.client_processes[client_id])
+        else:
+            custom_log('INFO: Not Verified Client {} Request'.format(client_id))
 
     def custom_log(log_message):
         output('Olympus: {}'.format(log_message))

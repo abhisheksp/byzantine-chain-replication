@@ -6,8 +6,10 @@ from collections import namedtuple
 
 
 class Message:
+    olympus_configuration_response_tag = 'configuration_response'
     client_request_tag = 'request'
     client_retransmission_tag = 'retransmission'
+    client_configuration_request_tag = 'configuration_request'
     replica_response_tag = 'response'
     replica_error_response_tag = 'error'
     replica_forward_request_tag = 'forward_request'
@@ -27,13 +29,21 @@ class Message:
     RequestShuttle = namedtuple('RequestShuttle', 'order_proof result_proof')
     ResultShuttle = namedtuple('ResponseShuttle', 'result result_proof')
 
-    def __init__(self, identifier):
+    def __init__(self, identifier=None):
         self.identifier = identifier
 
     def new_request(self, payload):
         request_id = uuid.uuid4()
         message_body = {'client_id': self.identifier, 'request_id': request_id, 'payload': payload}
         return self.client_request_tag, message_body
+
+    def new_configuration_request(self, payload):
+        request_id = uuid.uuid4()
+        message_body = {'client_id': self.identifier, 'request_id': request_id, 'payload': payload}
+        return self.client_configuration_request_tag, message_body
+
+    def new_configuration_response(self, payload):
+        return self.olympus_configuration_response_tag, payload
 
     def new_retransmission_request(self, old_request_id, payload):
         message_body = {'client_id': self.identifier, 'request_id': old_request_id, 'payload': payload}

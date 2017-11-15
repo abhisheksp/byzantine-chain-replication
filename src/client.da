@@ -23,7 +23,8 @@ class Client(process):
         self.request_timeout = (config['client_timeout'] / 1000)
         self.pending_requests = set()
         self.majority_replica_count = None
-        self.current_configuration = 0
+        self.current_configuration = None
+        self.request_count = 0
 
     def run():
         custom_log('INFO: Client is up and running')
@@ -34,15 +35,20 @@ class Client(process):
         await(False)
 
     def receive(msg=('configuration_response', payload)):
-        custom_log('INFO: Received New Configuration from Olympus')
-        self.olympus = payload['olympus']
-        self.replica_processes = payload['replicas']
-        self.replica_processes_set = set(self.replica_processes.values())
-        self.head = self.replica_processes[1]
-        self.majority_replica_count = payload['majority_count']
-        self.current_configuration = payload['configuration']
-        custom_log('INFO: Storing Olympus and Replicas processes')
-        custom_log('INFO: Initialized Majority Replica Count: {}'.format(self.majority_replica_count))
+        received_configuration = payload['configuration']
+        if self.current_configuration is None or self.current_configuration < received_configuration:
+            custom_log('INFO: Current Configuration Outdated')
+            custom_log('INFO: Received New Configuration from Olympus')
+            self.olympus = payload['olympus']
+            self.replica_processes = payload['replicas']
+            self.replica_processes_set = set(self.replica_processes.values())
+            self.head = self.replica_processes[1]
+            self.majority_replica_count = payload['majority_count']
+            self.current_configuration = payload['configuration']
+            custom_log('INFO: Storing Olympus and Replicas processes')
+            custom_log('INFO: Initialized Majority Replica Count: {}'.format(self.majority_replica_count))
+        else:
+            custom_log('INFO: Current Configuration already up to date')
 
     def receive(msg=('response', payload)):
         replica_id, signed_payload = payload['replica_id'], payload['payload']
@@ -82,7 +88,9 @@ class Client(process):
         serialized_payload = serialize_and_sign(operation)
         request = self.factory.new_request(serialized_payload)
         request_id = request[1]['request_id']
+        self.request_count += 1
         self.pending_requests.add(request_id)
+        send_configuration_request()
         send(request, to=receiver)
         log_msg = 'INFO: Sending Request, RequestID: {}, Receiver: {}, Operation: {}'
         custom_log(log_msg.format(request_id, receiver, operation))
@@ -92,10 +100,19 @@ class Client(process):
             custom_log('INFO: Request Timed Out')
             retransmit_request(request_id, operation)
 
+    def send_configuration_request():
+        if self.request_count % 10 == 0:
+            custom_log('INFO: Sending New Configuration Request')
+            empty_payload = serialize_and_sign({})
+            request = self.factory.new_configuration_request(empty_payload)
+            send(request, to=self.olympus)
+
     def retransmit_request(old_request_id, operation):
         custom_log('INFO: Retransmitting Old Request, RequestID: {} '.format(old_request_id))
+        self.request_count += 1
         payload = serialize_and_sign(operation)
         request = self.factory.new_retransmission_request(old_request_id, payload)
+        send_configuration_request()
         send(request, to=self.replica_processes_set)
         if await(old_request_id not in self.pending_requests):
             pass
@@ -145,9 +162,11 @@ class Client(process):
     # FOR DEMO PURPOSES
     def demo():
         verification_running_state = State()
+
         def regular_client_workflow():
             client_workloads = config['client_workload'][self.client_id]
-            custom_log('INFO: Client Workload Operations: {}, Count: {}'.format(client_workloads, len(client_workloads)))
+            custom_log(
+                'INFO: Client Workload Operations: {}, Count: {}'.format(client_workloads, len(client_workloads)))
             for operation in client_workloads:
                 op.apply_operation(verification_running_state, operation)
                 send_request(operation, self.head)
