@@ -29,6 +29,7 @@ class Replica(process):
         self.head_timeout = config['head_timeout']
         self.non_head_timeout = config['nonhead_timeout']
         self.current_configuration = 0
+        self.checkpointed_slot = 0
 
         # For Demo
         self.client_request_count = {cid: 0 for cid in self.client_processes.keys()}
@@ -445,6 +446,7 @@ class Replica(process):
                 custom_log('INFO: Completed checkpoint Proof will now be sent back upstream along the chain')
                 checkpoint_result = self.factory.new_checkpoint_result(serialize_and_sign(checkpoint_res_payload))
                 truncate_history(checkpoint_proof)
+                persist_checkpoint_info(checkpoint_proof['checkpoint_statements'])
                 forward_checkpoint_result(checkpoint_result)
 
     def receive(msg=('checkpoint_result_shuttle', payload)):
@@ -452,7 +454,7 @@ class Replica(process):
         self.completed_checkpoint_count += 1
         request_count = self.completed_checkpoint_count
         all_good = True
-        #self.failures = [(2, 'completed_checkpoint', 'replace_me'), (12, 'garbage', 'garbage')]
+        self.failures = [(2, 'completed_checkpoint', 'increment_slot'), (12, 'garbage', 'garbage')]
         if (request_count, 'completed_checkpoint', 'crash') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: crash())'
             custom_log(log_msg.format(request_count))
@@ -531,6 +533,7 @@ class Replica(process):
             checkpoint_res_payload = {'checkpoint_proof': next_checkpoint_proof}
             checkpoint_result = self.factory.new_checkpoint_result(serialize_and_sign(checkpoint_res_payload))
             truncate_history(next_checkpoint_proof)
+            persist_checkpoint_info(next_checkpoint_proof['checkpoint_statements'])
             forward_checkpoint_result(checkpoint_result)
         if not is_valid_checkpoint:
             custom_log('INFO: Completed Checkpoint Proof validation failed')
@@ -545,6 +548,16 @@ class Replica(process):
         if not self.is_head:
             custom_log('INFO: Forwarding completed checkpoint proof back to Replica: {}'.format(self.replica_id -1))
             send(checkpoint_result, to=self.prev_replica)
+
+    def receive(msg=('wedge_request', payload)):
+        custom_log('INFO: Wedge Request Received!: {}'.format(payload))
+        wedge_message = {
+        'replica_id': self.replica_id,
+        'history': self.history,
+        'running_state': self.running_state,
+        'checkpointed_slot': self.checkpointed_slot
+        }
+        send(('wedge_message', wedge_message), to=self.olympus)
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
@@ -610,6 +623,11 @@ class Replica(process):
         if len(checkpoint_proof['checkpoint_statements']) >   number_of_failures_tolerable:
             return True
         return False
+    def persist_checkpoint_info(checkpoint_statements):
+        for statement in checkpoint_statements:
+            if statement['replica_id'] == self.replica_id:
+                self.checkpointed_slot = statement['slot']
+
     def verify_order_proof(order_proof):
         slot_number = order_proof.slot
         operation = order_proof.operation

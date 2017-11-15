@@ -14,11 +14,13 @@ class Olympus(process):
         self.signing_key = config['olympus_singing_key']
         self.replica_count = config['replica_count']
         self.docker_wrapper = DockerWrapper()
+        self.replica_processes = {}
         custom_log('INFO: Olympus setup finished ...')
         self.current_configuration = 0
         self.replica_processes = None
         self.client_processes = None
         self.factory = Message()
+
 
     def run():
         custom_log('INFO: Starting to run Olympus')
@@ -43,14 +45,13 @@ class Olympus(process):
         if error:
             custom_log('ERR: Error retrieving Replica Node IP address')
 
-        replica_processes = {}
         for replica_id in range(1, self.replica_count + 1):
             replica_process = new(replica.Replica, args=(client_processes, replica_id, self.signature, config),
                                   at=replica_address)
             replica_processes[replica_id] = replica_process.pop()
+
         self.replica_processes = replica_processes
-        client_processes_set = set(client_processes.values())
-        replica_processes_set = set(replica_processes.values())
+        replica_processes_set = set(self.replica_processes.values())
 
         start(replica_processes_set)
         time.sleep(4)
@@ -67,7 +68,19 @@ class Olympus(process):
         await(False)
 
     def receive(msg=('reconfiguration_request', payload)):
-        output('Reconfiguration Request Raised')
+        custom_log('Reconfiguration Request Raised :{}'.format(payload))
+        replica_processes_set = set(self.replica_processes.values())
+        send(('wedge_request', {'key': 'I am a wedge statement'}), to=replica_processes_set)
+
+    def receive(msg=('wedge_message', payload)):
+        replica_id = payload['replica_id']
+        checkpointed_slot = payload['checkpointed_slot']
+        replica_history = payload['history']
+        replica_running_state = payload['running_state']
+        custom_log('INFO: Received Wedge Message (w) from replica {}'.format(replica_id))
+        custom_log('INFO: w.checkpointed_slot: {}'.format(checkpointed_slot))
+        custom_log('INFO: w.running_state: {}'.format(replica_running_state))
+        custom_log('INFO: w.history: {}'.format(replica_history))
 
     def receive(msg=('configuration_request', payload)):
         client_id, request_id, signed_payload = payload['client_id'], payload['request_id'], payload['payload']
