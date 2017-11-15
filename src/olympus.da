@@ -12,6 +12,7 @@ class Olympus(process):
         self.replica_count = config['replica_count']
         self.docker_wrapper = DockerWrapper()
         custom_log('INFO: Olympus setup finished ...')
+        self.current_configuration = 0
 
     def run():
         custom_log('INFO: Starting to run Olympus')
@@ -48,9 +49,14 @@ class Olympus(process):
         start(client_processes_set)
         start(replica_processes_set)
 
-        payload = {'olympus': self, 'replicas': replica_processes}
-        send(('new_configuration', payload), to=replica_processes_set)
-        send(('new_configuration', payload), to=client_processes_set)
+        payload = {
+            'olympus': self,
+            'replicas': replica_processes,
+            'configuration': self.current_configuration,
+            'majority_count': (self.replica_count // 2) + 1
+        }
+        send(('configuration_response', payload), to=replica_processes_set)
+        send(('configuration_response', payload), to=client_processes_set)
         await(False)
 
     def receive(msg=('reconfiguration_request', payload)):

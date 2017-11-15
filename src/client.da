@@ -23,23 +23,24 @@ class Client(process):
         self.request_timeout = (config['client_timeout'] / 1000)
         self.pending_requests = set()
         self.majority_replica_count = None
+        self.current_configuration = 0
 
     def run():
         custom_log('INFO: Client is up and running')
         custom_log('INFO: Initial State: (Pending_Requests: {})'.format(self.pending_requests))
         custom_log('INFO: Awaiting new configuration from Olympus')
-        await(some(received(('new_configuration', _,))))
+        await(some(received(('configuration_response', _,))))
         demo()
         await(False)
 
-    def receive(msg=('new_configuration', payload)):
+    def receive(msg=('configuration_response', payload)):
         custom_log('INFO: Received New Configuration from Olympus')
         self.olympus = payload['olympus']
         self.replica_processes = payload['replicas']
         self.replica_processes_set = set(self.replica_processes.values())
         self.head = self.replica_processes[1]
-        replica_count = len(self.replica_processes_set)
-        self.majority_replica_count = (replica_count // 2) + 1
+        self.majority_replica_count = payload['majority_count']
+        self.current_configuration = payload['configuration']
         custom_log('INFO: Storing Olympus and Replicas processes')
         custom_log('INFO: Initialized Majority Replica Count: {}'.format(self.majority_replica_count))
 
@@ -144,10 +145,9 @@ class Client(process):
     # FOR DEMO PURPOSES
     def demo():
         verification_running_state = State()
-
         def regular_client_workflow():
             client_workloads = config['client_workload'][self.client_id]
-            custom_log('INFO: Client Workload Operations: {}'.format(client_workloads))
+            custom_log('INFO: Client Workload Operations: {}, Count: {}'.format(client_workloads, len(client_workloads)))
             for operation in client_workloads:
                 op.apply_operation(verification_running_state, operation)
                 send_request(operation, self.head)
@@ -170,7 +170,7 @@ class Client(process):
         if test_case == 1:
             custom_log('INFO: Executing Test Case: 1')
             regular_client_workflow()
-        if test_case == 2:
+        elif test_case == 2:
             custom_log('INFO: Executing Test Case: 2')
             regular_client_workflow()
         elif test_case == 3:

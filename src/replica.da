@@ -40,10 +40,10 @@ class Replica(process):
 
     def run():
         custom_log('INFO: Started Replica {}'.format(self.replica_id))
-        await(some(received(('new_configuration', _,))))
+        await(some(received(('configuration_response', _,))))
         await(False)
 
-    def receive(msg=('new_configuration', payload)):
+    def receive(msg=('configuration_response', payload)):
         custom_log('INFO: Received New Configuration from Olympus')
         self.olympus = payload['olympus']
         self.replica_processes = payload['replicas']
