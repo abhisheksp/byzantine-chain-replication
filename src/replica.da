@@ -232,6 +232,7 @@ class Replica(process):
         is_verified = verify_order_proof(prev_order_proof)
         next_slot = next(self.slot)
         if not is_verified or prev_order_proof.slot != next_slot:
+            custom_log('INFO: Slot Hole: {} != {}'.format(prev_order_proof.slot, next_slot))
             custom_log('INFO: Verification failed. Replica found a proof of misbehaviour ... ')
             proof_of_misbehaviour = 'Signature Verification Failed or Slot Hole found'
             self.mode = Mode.IMMUTABLE

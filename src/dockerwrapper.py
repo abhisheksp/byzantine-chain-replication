@@ -1,9 +1,14 @@
+from pathlib import Path
+
 import docker
 
 import docker.errors
 
 
 # TODO: write tests for testing exception blocks
+import os
+
+
 class DockerWrapper:
     def __init__(self):
         self.lclient = docker.APIClient(base_url='unix://var/run/docker.sock')
@@ -12,7 +17,9 @@ class DockerWrapper:
 
     def start(self, image, name):
         try:
-            container = self.client.containers.run(image, detach=True, name=name, auto_remove=True)
+            logs_dir = os.path.join(Path(__file__).parents[1], 'logs')
+            volume_mnt = {logs_dir: {'bind': '/app/logs/', 'mode': 'rw'}}
+            container = self.client.containers.run(image, detach=True, name=name, auto_remove=True, volumes=volume_mnt)
             self.containers[container.id] = container
             return container.id, False
         except docker.errors.ContainerError as ce:
