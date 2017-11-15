@@ -32,11 +32,19 @@ class Replica(process):
 
         # For Demo
         self.client_request_count = {cid: 0 for cid in self.client_processes.keys()}
+        self.client_request_count[0] = 0
         self.forward_request_count = {cid: 0 for cid in self.client_processes.keys()}
+        self.forward_request_count[0] = 0
         self.request_shuttle_count = {cid: 0 for cid in self.client_processes.keys()}
+        self.request_shuttle_count[0] = 0
         self.result_shuttle_count = {cid: 0 for cid in self.client_processes.keys()}
+        self.result_shuttle_count[0] = 0
         failure_scenarios = config['failure_scenarios']
         self.failures = failure_scenarios.get((self.current_configuration, self.replica_id), {})
+        self.checkpoint_count = 0
+        self.completed_checkpoint_count = 0
+        self.running_state_count = 0
+        self.wedge_message_count = 0
 
     def run():
         custom_log('INFO: Started Replica {}'.format(self.replica_id))
@@ -190,7 +198,6 @@ class Replica(process):
         forward_request_shuttle(request_shuttle)
         custom_log('INFO: Running state after applying Operation:')
         output_running_state()
-        custom_log('INFO: CHECKPOINT')
         initiate_checkpoint_protocol(next_slot, operation)
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
@@ -240,7 +247,8 @@ class Replica(process):
         is_verified = verify_order_proof(prev_order_proof)
         next_slot = next(self.slot)
         if not is_verified or prev_order_proof.slot != next_slot:
-            custom_log('INFO: Slot Hole: {} != {}'.format(prev_order_proof.slot, next_slot))
+            if prev_order_proof.slot != next_slot:
+                custom_log('INFO: Verification failed! slot Hole was found!')
             custom_log('INFO: Verification failed. Replica found a proof of misbehaviour ... ')
             proof_of_misbehaviour = 'Signature Verification Failed or Slot Hole found'
             self.mode = Mode.IMMUTABLE
@@ -252,6 +260,7 @@ class Replica(process):
         output_running_state()
         client_id, request_id = prev_order_proof.client_id, prev_order_proof.request_id
         self.request_shuttle_count[client_id] += 1
+        self.request_shuttle_count[0] += 1
         request_count = self.request_shuttle_count[client_id]
         operation = prev_order_proof.operation
         custom_log('INFO: Verifying Operation ... ')
@@ -269,6 +278,8 @@ class Replica(process):
             operation = testutil.change_operation()
         order_statement = self.factory.new_order_statement(operation, prev_order_proof.slot)
         signed_order_statement = serialize_and_sign(order_statement)
+        if (0, request_shuttle_count[0], 'shuttle', 'invalid_order_sig') in self.failures:
+            signed_order_statement = fake_serialize_and_sign(order_statement)
         order_proof = self.factory.new_order_proof(prev_order_proof, signed_order_statement)
         result = op.apply_operation(self.running_state, operation)
         if (client_id, request_count, 'shuttle', 'change_result') in self.failures:
@@ -313,6 +324,7 @@ class Replica(process):
         client_id, request_id = result_proof.client_id, result_proof.request_id
         self.result_shuttle_count[client_id] += 1
         request_count = self.result_shuttle_count[client_id]
+        self.result_shuttle_count[0] += 1
         result_proof = result_proof._asdict()
         if (client_id, request_count, 'result_shuttle', 'drop_result_stmt') in self.failures:
             log_msg = 'INFO: Dropping Result Stmt, Client: {} Message: {}'
@@ -336,11 +348,12 @@ class Replica(process):
         if self.is_head:
             custom_log('INFO: Slot Number is: {}'.format(slot))
             if slot % 8 == 0:
+                custom_log('INFO: Initiating Checkpoint Protocol...')
                 new_checkpoint_proof_details = {'checkpoint_statements': [] }
                 empty_checkpoint_proof = self.factory.CheckpointProof(**new_checkpoint_proof_details)
                 replica_running_state = self.running_state
                 signed_running_state = serialize_and_sign(replica_running_state)
-                custom_log('INFO: Head Checkpointing...')
+                custom_log('INFO: Head started checkpointing ...')
                 checkpoint_proof = self.factory.new_checkpoint_proof(empty_checkpoint_proof, signed_running_state, slot)
                 checkpoint_req_payload = {'checkpoint_proof': checkpoint_proof}
                 checkpoint_request = self.factory.new_checkpoint_request(serialize_and_sign(checkpoint_req_payload))
@@ -348,7 +361,63 @@ class Replica(process):
 
     def receive(msg=('checkpoint_shuttle', payload)):
         custom_log('INFO: Replica Received a CheckPoint Proof')
-        if not self.is_head:
+        self.checkpoint_count += 1
+        request_count = self.checkpoint_count
+        all_good = True
+        #self.failures = [(2, 'checkpoint', 'replace_me'), (12, 'garbage', 'garbage')]
+        if (request_count, 'checkpoint', 'crash') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: crash())'
+            custom_log(log_msg.format(request_count))
+            testutil.crash()
+            custom_log('INFO: Replica Crashed!!')
+        if (request_count, 'checkpoint', 'sleep') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: sleep())'
+            custom_log(log_msg.format(request_count))
+            testutil.sleep()
+            custom_log('INFO: Replica Awake again after Sleep')
+        if (request_count, 'checkpoint', 'drop') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: drop())'
+            custom_log(log_msg.format(request_count))
+            if testutil.drop('checkpoint') == 'ignore_messages':
+                all_good = False
+            custom_log('INFO: Replica {} dropped the checkpoint proof!'.format(self.replica_id))
+        if (request_count, 'checkpoint', 'extra_op') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: extra_op())'
+            custom_log(log_msg.format(request_count))
+            testutil.extra_op(self.running_state)
+            custom_log('INFO: Applied Extra Operation: put("a","a") to replica running state')
+            custom_log('INFO: Modified Running State: {}'.format(self.running_state))
+        if (request_count, 'checkpoint', 'invalid_order_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: invalid_order_sig())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = request_shuttle_count[0] + 1
+            self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
+            custom_log('INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+        if (request_count, 'checkpoint', 'truncate_history') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: truncate_history())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = self.wedge_message_count + 1
+            self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
+            custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
+        if (request_count, 'checkpoint', 'change_operation') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: change_operation())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = request_shuttle_count[0] + 1
+            self.failures.append((0, failure_request_count, 'shuttle', 'change_operation'))
+            custom_log('INFO: Replica uses get("x") as the operation in the next outgoing shuttle')
+        if (request_count, 'checkpoint', 'change_result') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: change_result())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = result_shuttle_count[0] + 1
+            self.failures.append((0, failure_request_count, 'shuttle', 'change_result'))
+            custom_log('INFO: Replica uses the hash of "OK" in the next outgoing result shuttle')
+        if (request_count, 'checkpoint', 'drop_result_stmt') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: drop_result_stmt())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = result_shuttle_count[0] + 1
+            self.failures.append((0, failure_request_count, 'shuttle', 'drop_result_stmt'))
+            custom_log('INFO: Replica omit the heads result statement from the result proof in the next outgoing result shuttle')
+        if not self.is_head and all_good:
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
             if is_verified:
@@ -373,20 +442,78 @@ class Replica(process):
                 custom_log('INFO: Checkpoint Proof has reached TAIL!')
                 custom_log('INFO: Checkpoint Proof :{}'.format(checkpoint_proof))
                 checkpoint_res_payload = checkpoint_req_payload
+                custom_log('INFO: Completed checkpoint Proof will now be sent back upstream along the chain')
                 checkpoint_result = self.factory.new_checkpoint_result(serialize_and_sign(checkpoint_res_payload))
                 truncate_history(checkpoint_proof)
                 forward_checkpoint_result(checkpoint_result)
 
-    def handle_completed_checkpoint_proof(next_checkpoint_proof):
-        if not self.is_tail:
-            checkpoint_res_payload = {'checkpoint_proof': next_checkpoint_proof}
-            checkpoint_result = self.factory.new_checkpoint_result(serialize_and_sign(checkpoint_res_payload))
-            truncate_history(next_checkpoint_proof)
-            forward_checkpoint_result(checkpoint_result)
-
     def receive(msg=('checkpoint_result_shuttle', payload)):
         custom_log('INFO: Replica Received a completed CheckPoint Proof back.')
-        if not self.is_tail:
+        self.completed_checkpoint_count += 1
+        request_count = self.completed_checkpoint_count
+        all_good = True
+        #self.failures = [(2, 'completed_checkpoint', 'replace_me'), (12, 'garbage', 'garbage')]
+        if (request_count, 'completed_checkpoint', 'crash') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: crash())'
+            custom_log(log_msg.format(request_count))
+            custom_log('INFO: Replica Crashed!!')
+            testutil.crash()
+        if (request_count, 'completed_checkpoint', 'sleep') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: sleep())'
+            custom_log(log_msg.format(request_count))
+            testutil.sleep()
+            custom_log('INFO: Replica Awake again after Sleep')
+        if (request_count, 'completed_checkpoint', 'drop') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: drop())'
+            custom_log(log_msg.format(request_count))
+            if testutil.drop('completed_checkpoint') == 'ignore_messages':
+                all_good = False
+            custom_log('INFO: Replica {} dropped the checkpoint proof!'.format(self.replica_id))
+        if (request_count, 'completed_checkpoint', 'increment_slot') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: increment_slot())'
+            custom_log(log_msg.format(request_count))
+            if self.is_head:
+                next(self.slot)
+                custom_log('INFO: Injected Failure: slot was incremented!')
+            else:
+                custom_log('INFO: Replica is not the head. Failure Injection has no effect')
+        if (request_count, 'completed_checkpoint', 'extra_op') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: extra_op())'
+            custom_log(log_msg.format(request_count))
+            testutil.extra_op(self.running_state)
+            custom_log('INFO: Applied Extra Operation: put("a","a") to replica running state')
+            custom_log('INFO: Modified Running State: {}'.format(self.running_state))
+        if (request_count, 'completed_checkpoint', 'invalid_order_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: invalid_order_sig())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = request_shuttle_count[0] + 1
+            self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
+            custom_log('INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+        if (request_count, 'completed_checkpoint', 'truncate_history') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: truncate_history())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = self.wedge_message_count + 1
+            self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
+            custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
+        if (request_count, 'completed_checkpoint', 'change_operation') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: change_operation())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = request_shuttle_count[0] + 1
+            self.failures.append((0, failure_request_count, 'shuttle', 'change_operation'))
+            custom_log('INFO: Replica uses get("x") as the operation in the next outgoing shuttle')
+        if (request_count, 'completed_checkpoint', 'change_result') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: change_result())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = result_shuttle_count[0] + 1
+            self.failures.append((0, failure_request_count, 'shuttle', 'change_result'))
+            custom_log('INFO: Replica uses the hash of "OK" in the next outgoing result shuttle')
+        if (request_count, 'completed_checkpoint', 'drop_result_stmt') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: drop_result_stmt())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = result_shuttle_count[0] + 1
+            self.failures.append((0, failure_request_count, 'shuttle', 'drop_result_stmt'))
+            custom_log('INFO: Replica omit the heads result statement from the result proof in the next outgoing result shuttle')
+        if not self.is_tail and all_good:
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
             if is_verified:
@@ -396,19 +523,37 @@ class Replica(process):
                 next_checkpoint_proof = payload['checkpoint_proof']
                 handle_completed_checkpoint_proof(next_checkpoint_proof)
 
+    def handle_completed_checkpoint_proof(next_checkpoint_proof):
+        is_valid_checkpoint = validate_completed_checkpoint(next_checkpoint_proof)
+        if is_valid_checkpoint and not self.is_tail:
+            custom_log('INFO: Completed Checkpoint Proof validation successful')
+            custom_log('INFO: At least "t" number replicas have added checkpoint proofs')
+            checkpoint_res_payload = {'checkpoint_proof': next_checkpoint_proof}
+            checkpoint_result = self.factory.new_checkpoint_result(serialize_and_sign(checkpoint_res_payload))
+            truncate_history(next_checkpoint_proof)
+            forward_checkpoint_result(checkpoint_result)
+        if not is_valid_checkpoint:
+            custom_log('INFO: Completed Checkpoint Proof validation failed')
+            custom_log('INFO: Less than "t" number replicas have added checkpoint proofs!')
+
     def forward_checkpoint_request(checkpoint_request):
         if not self.is_tail:
-            custom_log('INFO: Forwarding checkpoint_proof to Replica: {}'.format(self.replica_id + 1))
+            custom_log('INFO: Forwarding checkpoint proof to Replica: {}'.format(self.replica_id + 1))
             send(checkpoint_request, to=self.next_replica)
 
     def forward_checkpoint_result(checkpoint_result):
         if not self.is_head:
-            custom_log('INFO: Forwarding checkpoint_proof back to Replica: {}'.format(self.replica_id -1))
+            custom_log('INFO: Forwarding completed checkpoint proof back to Replica: {}'.format(self.replica_id -1))
             send(checkpoint_result, to=self.prev_replica)
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
         return self.sign(serialized_payload)
+
+    def fake_serialize_and_sign(payload):
+        serialized_payload = pickle.dumps(payload)
+        fake_key = testutil.generate_fake_key()
+        return fake_key.sign(serialized_payload)
 
     def forward_request_shuttle(request_shuttle):
         if not self.is_tail:
@@ -460,7 +605,11 @@ class Replica(process):
         custom_log('INFO: Checkpoint Proof Verification')
         #TO DO - Verification logic
         return True
-
+    def validate_completed_checkpoint(checkpoint_proof):
+        number_of_failures_tolerable = (self.config['replica_count'] - 1) / 2
+        if len(checkpoint_proof['checkpoint_statements']) >   number_of_failures_tolerable:
+            return True
+        return False
     def verify_order_proof(order_proof):
         slot_number = order_proof.slot
         operation = order_proof.operation
@@ -495,6 +644,7 @@ class Replica(process):
         output('Replica: {} INFO: Running State: {}'.format(self.replica_id, self.running_state))
 
     def output_cache():
+        output('INFO: cache contents:')
         formatter = lambda x: 'Client: {} Request: {} => Result: {}'.format(x[0][0], x[0][1], x[1])
         message = '\n'.join(map(formatter, self.result_shuttle_cache.items()))
         output('Replica {} : Cache: {}'.format(self.replica_id, message))

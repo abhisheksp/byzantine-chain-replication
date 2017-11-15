@@ -2,9 +2,11 @@ import json
 import os
 import random
 import string
-
+import logging
 import operation
-
+import time
+import nacl.signing
+import nacl.exceptions
 
 def persist_state(state, outfile):
     parent_dir = os.path.abspath(os.pardir)
@@ -78,13 +80,17 @@ def parse_failure_scenarios(config):
             trigger_type = 'shuttle'
         elif split[0].startswith('result_shuttle'):
             trigger_type = 'result_shuttle'
+        elif split[0].startswith('checkpoint'):
+            trigger_type = 'checkpoint'
 
         if 'operation' in split[1]:
             failure = 'change_operation'
         elif 'change_result' in split[1]:
             failure = 'change_result'
-        else:
+        elif 'drop_result_stmt' in split[1]:
             failure = 'drop_result_stmt'
+        else:
+            failure = 'replace_me'
         return c, m, trigger_type, failure
 
     replica_failures = {}
@@ -111,3 +117,34 @@ def change_result():
 def drop_result_stmt(result_proof):
     result_proof['result_statements'] = result_proof['result_statements'][1:]
     return result_proof
+
+def testfailure():
+    return "TEST COMPLETE"
+
+def crash():
+    logging.shutdown()
+    os._exit(-1)
+
+def sleep():
+    time.sleep(6)
+
+def drop(request):
+    if request == 'checkpoint':
+        return 'ignore_messages'
+    elif request == 'completed_checkpoint':
+        return 'ignore_messages'
+
+def extra_op(cur_running_state):
+    extra_operation = {'operation': 'put', 'key': 'a', 'val': 'a'}
+    return operation.apply_operation(cur_running_state, extra_operation)
+
+def invalid_order_sig():
+    pass
+
+def generate_fake_key():
+    sign_key = nacl.signing.SigningKey.generate()
+    return sign_key
+
+def truncate_history(history):
+    return history[:-1]
+
