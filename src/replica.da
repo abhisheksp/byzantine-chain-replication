@@ -53,8 +53,12 @@ class Replica(process):
         await(False)
 
     def receive(msg=('configuration_response', payload)):
-        custom_log('INFO: Received New Configuration from Olympus')
+        if 'status' in payload and payload['status'] == "reconfigure":
+            custom_log('INFO: Replica Reconfiguring ... Received New Configuration from Olympus')
+        else:
+            custom_log('INFO: Received New Configuration from Olympus')
         self.olympus = payload['olympus']
+        self.current_configuration = payload['configuration']
         self.replica_processes = payload['replicas']
         self.head = self.replica_processes[1]
         self.next_replica = None if self.is_tail else self.replica_processes[self.replica_id + 1]
@@ -554,6 +558,7 @@ class Replica(process):
         wedge_message = {
         'replica_id': self.replica_id,
         'history': self.history,
+        'replica_config': self.current_configuration,
         'running_state': self.running_state,
         'checkpointed_slot': self.checkpointed_slot
         }
@@ -586,7 +591,7 @@ class Replica(process):
         custom_log(' Raising Reconfiguration Request ... : {}'.format(proof_of_misbehaviour))
         type_ = 'replica'
         signed_message = serialize_and_sign(proof_of_misbehaviour)
-        reconfig_request = self.factory.new_reconfiguration_request(type_, signed_message)
+        reconfig_request = self.factory.new_reconfiguration_request(type_, signed_message, self.current_configuration)
         send(reconfig_request, to=self.olympus)
 
     def send_response_to_client(client_id, result_shuttle):
@@ -619,7 +624,7 @@ class Replica(process):
         #TO DO - Verification logic
         return True
     def validate_completed_checkpoint(checkpoint_proof):
-        number_of_failures_tolerable = (self.config['replica_count'] - 1) / 2
+        number_of_failures_tolerable = (self.config['replica_count'] - 1) // 2
         if len(checkpoint_proof['checkpoint_statements']) >   number_of_failures_tolerable:
             return True
         return False

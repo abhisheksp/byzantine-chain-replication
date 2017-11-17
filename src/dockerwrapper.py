@@ -31,6 +31,12 @@ class DockerWrapper:
         except KeyError:
             return 'invalid container id', True
 
+    def remove(self, container_id):
+        try:
+            self.containers[container_id].remove(force=True)
+        except docker.errors.APIError as de:
+            return 'docker error: {}'.format(de)
+
     def stop(self, container_id):
         try:
             self.containers[container_id].stop()
@@ -46,3 +52,10 @@ class DockerWrapper:
         except docker.errors.APIError as de:
             return None, 'docker error: {}'.format(de)
         # TODO: KeyError
+
+    def restart(self, container_id):
+        try:
+            self.containers[container_id].restart(timeout=1)
+            return False
+        except docker.errors.APIError as de:
+            return True

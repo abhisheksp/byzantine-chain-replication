@@ -57,8 +57,8 @@ class Message:
         message_body = {'client_id': self.identifier, 'request_id': old_request_id, 'payload': payload}
         return self.client_retransmission_tag, message_body
 
-    def new_reconfiguration_request(self, type_, payload):
-        message_body = {'id': self.identifier, 'type': type_, 'payload': payload}
+    def new_reconfiguration_request(self, type_, payload, configuration):
+        message_body = {'id': self.identifier, 'replica_config': configuration,'type': type_, 'payload': payload}
         return self.reconfiguration_tag, message_body
 
     def new_forward_request(self, payload):
