@@ -26,7 +26,7 @@ class Message:
         'ResultProof',
         'client_id request_id result operation configuration result_statements'
     )
-    RequestShuttle = namedtuple('RequestShuttle', 'order_proof result_proof')
+    RequestShuttle = namedtuple('RequestShuttle', 'order_proof result_proof signed_operation')
     ResultShuttle = namedtuple('ResponseShuttle', 'result result_proof')
 
     def __init__(self, identifier=None):
@@ -119,7 +119,8 @@ class Message:
     def parse_request_shuttle(self, payload):
         order_proof = self.OrderProof(**payload['order_proof'])
         result_proof = self.ResultProof(**payload['result_proof'])
-        return self.RequestShuttle(order_proof, result_proof)
+        signed_operation = payload['signed_operation']
+        return self.RequestShuttle(order_proof, result_proof, signed_operation)
 
     def parse_result_shuttle(self, payload):
         result = payload['result']

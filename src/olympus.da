@@ -52,8 +52,9 @@ class Olympus(process):
         client_processes_set = set(client_processes.values())
         replica_processes_set = set(replica_processes.values())
 
-        start(client_processes_set)
         start(replica_processes_set)
+        time.sleep(10)
+        start(client_processes_set)
 
         payload = {
             'olympus': self,
