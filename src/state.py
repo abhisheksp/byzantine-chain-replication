@@ -24,5 +24,8 @@ class State:
                 return 'OK'
         return 'FAIL'
 
+    def __eq__(self, other):
+        return self.value == other.value
+
     def __repr__(self):
         return '{}'.format(self.value)

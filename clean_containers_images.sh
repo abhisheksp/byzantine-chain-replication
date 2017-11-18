@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
-docker kill replicanode
-docker kill replicanode1
-docker rm replicanode
-docker rm replicanode1
+docker rm replicanode0  -f
+docker rm replicanode1  -f
+docker rm replicanode2  -f
+docker rm replicanode3  -f
+docker rm replicanode4  -f
+docker rm replicanode5  -f
 docker rmi replicanode_img

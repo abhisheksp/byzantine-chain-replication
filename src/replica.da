@@ -6,6 +6,9 @@ import operation as op
 from constants import Mode
 from message import Message
 from slot import Slot
+import nacl
+import nacl.hash
+import nacl.encoding
 
 
 class Replica(process):
@@ -563,6 +566,20 @@ class Replica(process):
         'checkpointed_slot': self.checkpointed_slot
         }
         send(('wedge_message', wedge_message), to=self.olympus)
+
+    def receive(msg=('catch_up', payload)):
+        custom_log('INFO: Received Catch Up Message from Olympus:')
+        custom_log('Operations to catchup: {}'.format(payload))
+        hashed_running_state = ''
+        for operation in payload:
+            result = op.apply_operation(self.running_state, operation)
+        caught_up = {
+            'hashed_running_state': self.running_state,
+            'replica_id': self.replica_id,
+            'replica_config': self.current_configuration
+        }
+        send(('caught_up',caught_up ), to = self.olympus)
+
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
