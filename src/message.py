@@ -16,17 +16,25 @@ class Message:
     reconfiguration_tag = 'reconfiguration_request'
     request_shuttle_tag = 'request_shuttle'
     result_shuttle_tag = 'result_shuttle'
+    checkpoint_shuttle_tag = 'checkpoint_shuttle'
+    checkpoint_result_shuttle_tag = 'checkpoint_result_shuttle'
     OrderStatement = namedtuple('OrderStatement', 'slot operation replica_id')
     OrderProof = namedtuple(
         'OrderProof',
         'client_id request_id slot operation configuration order_statements'
     )
+    CheckpointProof = namedtuple(
+        'CheckpointProof',
+        'checkpoint_statements'
+    )
+
     ResultStatement = namedtuple('OrderStatement', 'result operation replica_id')
     ResultProof = namedtuple(
         'ResultProof',
         'client_id request_id result operation configuration result_statements'
     )
     RequestShuttle = namedtuple('RequestShuttle', 'order_proof result_proof signed_operation')
+    CheckPointShuttle =  namedtuple('CheckPointShuttle', 'checkpoint_proof')
     ResultShuttle = namedtuple('ResponseShuttle', 'result result_proof')
 
     def __init__(self, identifier=None):
@@ -49,8 +57,8 @@ class Message:
         message_body = {'client_id': self.identifier, 'request_id': old_request_id, 'payload': payload}
         return self.client_retransmission_tag, message_body
 
-    def new_reconfiguration_request(self, type_, payload):
-        message_body = {'id': self.identifier, 'type': type_, 'payload': payload}
+    def new_reconfiguration_request(self, type_, payload, configuration):
+        message_body = {'id': self.identifier, 'replica_config': configuration,'type': type_, 'payload': payload}
         return self.reconfiguration_tag, message_body
 
     def new_forward_request(self, payload):
@@ -68,6 +76,14 @@ class Message:
     def new_request_shuttle(self, payload):
         message_body = {'replica_id': self.identifier, 'payload': payload}
         return self.request_shuttle_tag, message_body
+
+    def new_checkpoint_request(self, payload):
+        message_body = {'replica_id': self.identifier, 'payload': payload}
+        return self.checkpoint_shuttle_tag, message_body
+
+    def new_checkpoint_result(self, payload):
+        message_body = {'replica_id': self.identifier, 'payload': payload}
+        return self.checkpoint_result_shuttle_tag, message_body
 
     def new_result_shuttle(self, payload):
         message_body = {'replica_id': self.identifier, 'payload': payload}
@@ -122,7 +138,21 @@ class Message:
         signed_operation = payload['signed_operation']
         return self.RequestShuttle(order_proof, result_proof, signed_operation)
 
+    def parse_checkpoint_request(self, payload):
+        return self.CheckpointProof(**payload['checkpoint_proof'])
+
     def parse_result_shuttle(self, payload):
         result = payload['result']
         result_proof = self.ResultProof(**payload['result_proof'])
         return self.ResultShuttle(result, result_proof)
+
+    def new_checkpoint_proof(self, prev_checkpoint_proof, signed_running_state, slot):
+        checkpoint_statement = {
+            'replica_id': self.identifier,
+            'slot': slot,
+            'signed_running_state': signed_running_state
+        }
+        checkpoint_statements = prev_checkpoint_proof.checkpoint_statements + [checkpoint_statement]
+        checkpoint_proof = {'checkpoint_statements': checkpoint_statements}
+        return checkpoint_proof
+
