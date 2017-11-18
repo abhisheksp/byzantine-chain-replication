@@ -6,9 +6,6 @@ import operation as op
 from constants import Mode
 from message import Message
 from slot import Slot
-import nacl
-import nacl.hash
-import nacl.encoding
 
 
 class Replica(process):

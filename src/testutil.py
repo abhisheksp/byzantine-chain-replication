@@ -8,6 +8,7 @@ import time
 import nacl.signing
 import nacl.exceptions
 
+
 def persist_state(state, outfile):
     parent_dir = os.path.abspath(os.pardir)
     logs_dir = 'logs'
@@ -68,40 +69,100 @@ def parse_client_workloads(config):
 
 
 def parse_failure_scenarios(config):
-    def parse_trigger_failure(trigger_failure_split):
-        split = trigger_failure_split.split('),')
-        c = int(split[0][-3]) + 1
-        m = int(split[0][-1]) + 1
-        if split[0].startswith('client'):
-            trigger_type = 'client_request'
-        elif split[0].startswith('forwarded'):
-            trigger_type = 'forwarded_request'
-        elif split[0].startswith('shuttle'):
-            trigger_type = 'shuttle'
-        elif split[0].startswith('result_shuttle'):
-            trigger_type = 'result_shuttle'
-        elif split[0].startswith('checkpoint'):
-            trigger_type = 'checkpoint'
+    def between(s, start, end):
+        p1 = s.find(start)
+        p2 = s.find(end)
+        return s[p1+1:p2]
 
-        if 'operation' in split[1]:
+    def parse_failure(split):
+        if 'operation' in split:
             failure = 'change_operation'
-        elif 'change_result' in split[1]:
+        elif 'change_result' in split:
             failure = 'change_result'
-        elif 'drop_result_stmt' in split[1]:
+        elif 'drop_result_stmt' in split:
             failure = 'drop_result_stmt'
+        elif 'crash' in split:
+            failure = 'crash'
+        elif 'truncate_history' in split:
+            failure = 'truncate_history'
+        elif 'sleep' in split:
+            failure = 'sleep'
+        elif 'drop(' in split:
+            failure = 'drop'
+        elif 'increment_slot' in split:
+            failure = 'increment_slot'
+        elif 'extra_op' in split:
+            failure = 'extra_op'
+        elif 'invalid_order_sig' in split:
+            failure = 'invalid_order_sig'
+        elif 'invalid_result_sig' in split:
+            failure = 'invalid_result_sig'
+        elif 'drop_checkpt_stmts' in split:
+            failure = 'drop_checkpt_stmts'
         else:
             failure = 'replace_me'
-        return c, m, trigger_type, failure
+        return failure
+
+    def parse_trigger(split):
+        if split.startswith('client'):
+            trigger_type = 'client_request'
+        elif split.startswith('forwarded'):
+            trigger_type = 'forwarded_request'
+        elif split.startswith('shuttle'):
+            trigger_type = 'shuttle'
+        elif split.startswith('result_shuttle'):
+            trigger_type = 'result_shuttle'
+        elif split.startswith('wedge_request'):
+            trigger_type = 'wedge_request'
+        elif split.startswith('new_configuration'):
+            trigger_type = 'new_configuration'
+        elif split.startswith('checkpoint'):
+            trigger_type = 'checkpoint'
+        elif split.startswith('completed_checkpoint'):
+            trigger_type = 'completed_checkpoint'
+        elif split.startswith('get_running_state'):
+            trigger_type = 'get_running_state'
+        elif split.startswith('catch_up'):
+            trigger_type = 'catch_up'
+        else:
+            trigger_type = 'UNKNOWN'
+        return trigger_type
+
+    def parse_trigger_failure(trigger_failure_split):
+        if len(between(trigger_failure_split, '(', ')')) == 3:
+            split = trigger_failure_split.split('),')
+            c = int(split[0][-3]) + 1
+            m = int(split[0][-1]) + 1
+            trigger_type = parse_trigger(split[0])
+            failure = parse_failure(split[1])
+            failure_parameter = None
+            if failure in ('truncate_history', 'sleep'):
+                failure_parameter = int(between(split[1], '(', ')'))
+            return c, m, trigger_type, failure, failure_parameter
+        elif len(between(trigger_failure_split, '(', ')')) == 1:
+            split = trigger_failure_split.split('),')
+            m = int(split[0][-1]) + 1
+            trigger_type = parse_trigger(split[0])
+            failure = parse_failure(split[1])
+            failure_parameter = None
+            if failure in ('truncate_history', 'sleep'):
+                failure_parameter = int(between(split[1], '(', ')'))
+            return m, trigger_type, failure, failure_parameter
 
     replica_failures = {}
     for k, v in config.items():
         if k.startswith('failures'):
-            configuration = int(k[k.find('[') + 1])
+            configuration = int(k[k.find('[') + 1]) + 1
             replica = int(k[k.find(']') - 1]) + 1
-            failures = set()
+            failures = {}
             for trigger_failure in v.split('; '):
-                c, m, trigger_type, failure = parse_trigger_failure(trigger_failure)
-                failures.add((c, m, trigger_type, failure))
+                failure = parse_trigger_failure(trigger_failure)
+                if len(failure) == 5:
+                    c, m, trigger_type, failure, failure_param = parse_trigger_failure(trigger_failure)
+                    failures[(c, m, trigger_type, failure)] = failure_param
+                else:
+                    m, trigger_type, failure, failure_param = parse_trigger_failure(trigger_failure)
+                    failures[(m, trigger_type, failure)] = failure_param
             replica_failures[(configuration, replica)] = failures
     return replica_failures
 
@@ -118,15 +179,19 @@ def drop_result_stmt(result_proof):
     result_proof['result_statements'] = result_proof['result_statements'][1:]
     return result_proof
 
+
 def testfailure():
     return "TEST COMPLETE"
+
 
 def crash():
     logging.shutdown()
     os._exit(-1)
 
+
 def sleep():
     time.sleep(6)
+
 
 def drop(request):
     if request == 'checkpoint':
@@ -134,17 +199,20 @@ def drop(request):
     elif request == 'completed_checkpoint':
         return 'ignore_messages'
 
+
 def extra_op(cur_running_state):
     extra_operation = {'operation': 'put', 'key': 'a', 'val': 'a'}
     return operation.apply_operation(cur_running_state, extra_operation)
 
+
 def invalid_order_sig():
     pass
+
 
 def generate_fake_key():
     sign_key = nacl.signing.SigningKey.generate()
     return sign_key
 
+
 def truncate_history(history):
     return history[:-1]
-
