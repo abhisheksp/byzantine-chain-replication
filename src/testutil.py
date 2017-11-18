@@ -189,8 +189,8 @@ def crash():
     os._exit(-1)
 
 
-def sleep():
-    time.sleep(6)
+def sleep(sleep_time=6):
+    time.sleep(sleep_time)
 
 
 def drop(request):

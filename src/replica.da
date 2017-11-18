@@ -28,7 +28,7 @@ class Replica(process):
         self.olympus = None
         self.head_timeout = config['head_timeout']
         self.non_head_timeout = config['nonhead_timeout']
-        self.current_configuration = 0
+        self.current_configuration = 1
         self.checkpointed_slot = 0
 
         # For Demo
@@ -87,6 +87,11 @@ class Replica(process):
                 custom_log(log_msg.format(sender_replica_id, client_id, request_id))
                 self.forward_request_count[client_id] += 1
                 request_count = self.forward_request_count[client_id]
+                if (client_id, request_count, 'forward_request', 'sleep') in self.failures:
+                    sleep_time = self.failures[(client_id, request_count, 'forward_request', 'sleep')]
+                    log_msg = 'Injecting Failure: Sleep for {} milliseconds, Client: {} Message: {}'
+                    custom_log(log_msg.format(sleep_time, self.replica_id, client_id, request_count))
+                    testutil.sleep(sleep_time)
                 operation = payload['operation']
                 if (client_id, request_count, 'forwarded_request', 'change_operation') in self.failures:
                     log_msg = 'INFO : Injecting Failure: Change Operation, Client: {} Message: {}'
@@ -156,6 +161,11 @@ class Replica(process):
             log_msg = 'Injecting Failure: Change Operation, Client: {} Message: {}'
             custom_log(log_msg.format(self.replica_id, client_id, request_count))
             operation = testutil.change_operation()
+        if (client_id, request_count, 'client_request', 'sleep') in self.failures:
+            sleep_time = self.failures[(client_id, request_count, 'client_request', 'sleep')]
+            log_msg = 'Injecting Failure: Sleep for {} milliseconds, Client: {} Message: {}'
+            custom_log(log_msg.format(sleep_time, self.replica_id, client_id, request_count))
+            testutil.sleep(sleep_time)
         next_slot = next(self.slot)
         custom_log('INFO: Assigning new slot: {}'.format(next_slot))
         order_statement = self.factory.new_order_statement(operation, next_slot)
@@ -276,6 +286,11 @@ class Replica(process):
             proof_of_misbehaviour = 'Operation Verification Failed'
             send_reconfiguration_request(proof_of_misbehaviour)
             return
+        if (client_id, request_count, 'shuttle', 'sleep') in self.failures:
+            sleep_time = self.failures[(client_id, request_count, 'shuttle', 'sleep')]
+            log_msg = 'Injecting Failure: Sleep for {} milliseconds, Client: {} Message: {}'
+            custom_log(log_msg.format(sleep_time, self.replica_id, client_id, request_count))
+            testutil.sleep(sleep_time)
 
         if (client_id, request_count, 'shuttle', 'change_operation') in self.failures:
             log_msg = 'INFO: Injecting Failure: Change Operation, Client: {} Message: {}'
@@ -331,6 +346,12 @@ class Replica(process):
         request_count = self.result_shuttle_count[client_id]
         self.result_shuttle_count[0] += 1
         result_proof = result_proof._asdict()
+        if (client_id, request_count, 'result_shuttle', 'sleep') in self.failures:
+            sleep_time = self.failures[(client_id, request_count, 'result_shuttle', 'sleep')]
+            log_msg = 'Injecting Failure: Sleep for {} milliseconds, Client: {} Message: {}'
+            custom_log(log_msg.format(sleep_time, self.replica_id, client_id, request_count))
+            testutil.sleep(sleep_time)
+
         if (client_id, request_count, 'result_shuttle', 'drop_result_stmt') in self.failures:
             log_msg = 'INFO: Dropping Result Stmt, Client: {} Message: {}'
             custom_log(log_msg.format(self.replica_id, client_id, request_count))
@@ -458,7 +479,7 @@ class Replica(process):
         self.completed_checkpoint_count += 1
         request_count = self.completed_checkpoint_count
         all_good = True
-        self.failures = [(2, 'completed_checkpoint', 'increment_slot'), (12, 'garbage', 'garbage')]
+        # self.failures = [(2, 'completed_checkpoint', 'increment_slot'), (12, 'garbage', 'garbage')]
         if (request_count, 'completed_checkpoint', 'crash') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: crash())'
             custom_log(log_msg.format(request_count))
@@ -602,7 +623,7 @@ class Replica(process):
         send(forward_request, to=self.head)
 
     def send_reconfiguration_request(proof_of_misbehaviour):
-        custom_log(' Raising Reconfiguration Request ... : {}'.format(proof_of_misbehaviour))
+        custom_log('Raising Reconfiguration Request ... : {}'.format(proof_of_misbehaviour))
         type_ = 'replica'
         signed_message = serialize_and_sign(proof_of_misbehaviour)
         reconfig_request = self.factory.new_reconfiguration_request(type_, signed_message, self.current_configuration)
