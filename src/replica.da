@@ -90,7 +90,8 @@ class Replica(process):
                     log_msg = 'INFO: Injecting Failure: Client Request: Truncate History, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
                     failure_request_count = self.wedge_message_count + 1
-                    self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
+                    n = self.failures[client_id, request_count, 'client_request', 'truncate_history']
+                    self.failures[(0, failure_request_count, 'wedge', 'truncate_history')] = n
                     custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
                 if (client_id, request_count, 'client_request', 'increment_slot') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Client Request: Increment Slot), Client: {} Message: {}'
@@ -101,7 +102,7 @@ class Replica(process):
                     log_msg = 'INFO: Injecting Failure: Client Request: Invalid Order Sig), Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
                     failure_request_count = self.request_shuttle_count[0] + 1
-                    self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
+                    self.failures[(0, failure_request_count, 'shuttle', 'invalid_order_sig')] = None
                     custom_log(
                         'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
                 if (client_id, request_count, 'client_request', 'extra_op') in self.failures:
@@ -141,7 +142,8 @@ class Replica(process):
                     log_msg = 'INFO: Injecting Failure: Forwarded Request: Truncate History, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
                     failure_request_count = self.wedge_message_count + 1
-                    self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
+                    n = self.failures[(client_id, request_count, 'forwarded_request', 'truncate_history')]
+                    self.failures[(0, failure_request_count, 'wedge', 'truncate_history')] = n
                     custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
                 if (client_id, request_count, 'forwarded_request', 'sleep') in self.failures:
                     sleep_time = self.failures[(client_id, request_count, 'forwarded_request', 'sleep')]
@@ -163,7 +165,7 @@ class Replica(process):
                     log_msg = 'INFO: Injecting Failure: Forwarded Request: Invalid Order Sig), Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
                     failure_request_count = self.request_shuttle_count[0] + 1
-                    self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
+                    self.failures[(0, failure_request_count, 'shuttle', 'invalid_order_sig')] = None
                     custom_log(
                         'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
                 operation = payload['operation']
@@ -349,7 +351,8 @@ class Replica(process):
             log_msg = 'INFO: Injecting Failure: Request Shuttle: Truncate History, Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
             failure_request_count = self.wedge_message_count + 1
-            self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
+            n = self.failures[(client_id, request_count, 'shuttle', 'truncate_history')]
+            self.failures[(0, failure_request_count, 'wedge', 'truncate_history')] = n
             custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
         if (client_id, request_count, 'shuttle', 'extra_op') in self.failures:
             log_msg = 'INFO: Injecting Failure: Request Shuttle: Extra Op), Client: {} Message: {}'
@@ -396,7 +399,7 @@ class Replica(process):
             log_msg = 'INFO: Injecting Failure: Request Shuttle: Invalid Order Sig), Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
             failure_request_count = self.request_shuttle_count[0] + 1
-            self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
+            self.failures[(0, failure_request_count, 'shuttle', 'invalid_order_sig')] = None
             custom_log(
                 'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
         if (0, self.request_shuttle_count[0], 'shuttle', 'invalid_order_sig') in self.failures:
@@ -457,7 +460,8 @@ class Replica(process):
             log_msg = 'INFO: Injecting Failure: Result Shuttle: Truncate History, Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
             failure_request_count = self.wedge_message_count + 1
-            self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
+            n = self.failures[(client_id, request_count, 'result_shuttle', 'truncate_history')]
+            self.failures[(0, failure_request_count, 'wedge', 'truncate_history')] = n
             custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
         if (client_id, request_count, 'result_shuttle', 'invalid_order_sig') in self.failures:
             log_msg = 'INFO: Injecting Failure: Result Shuttle: Invalid Order Sig), Client: {} Message: {}'
@@ -546,6 +550,7 @@ class Replica(process):
             testutil.extra_op(self.running_state)
             custom_log('INFO: Applied Extra Operation: put("a","a") to replica running state')
             custom_log('INFO: Modified Running State: {}'.format(self.running_state))
+        # TODO: Fix self.failures.append => dict syntax
         if (request_count, 'checkpoint', 'invalid_order_sig') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: invalid_order_sig())'
             custom_log(log_msg.format(request_count))
