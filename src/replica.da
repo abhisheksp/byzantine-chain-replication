@@ -26,6 +26,7 @@ class Replica(process):
         self.slot = Slot()
         self.result_shuttle_cache = {}
         self.olympus = None
+        # TODO Verify milliseconds/seconds precision
         self.head_timeout = config['head_timeout']
         self.non_head_timeout = config['nonhead_timeout']
         self.current_configuration = 1
@@ -78,6 +79,11 @@ class Replica(process):
                     log_msg = 'INFO: Injecting Failure: Client Request: Drop, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
                     return
+                if (client_id, request_count, 'client_request', 'increment_slot') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Client Request: Increment Slot), Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    next(self.slot)
+                    custom_log('INFO: Injected Failure: slot was incremented!')
                 handle_new_request(client_id, request_id, operation, signed_payload)
             else:
                 custom_log('INFO: Not Verified Client {} Request'.format(client_id))
@@ -104,6 +110,11 @@ class Replica(process):
                     log_msg = 'Injecting Failure: Forwarded Request: Sleep for {} milliseconds, Client: {} Message: {}'
                     custom_log(log_msg.format(sleep_time, client_id, request_count))
                     testutil.sleep(sleep_time)
+                if (client_id, request_count, 'forwarded_request', 'increment_slot') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Forwarded Request: Increment Slot), Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    next(self.slot)
+                    custom_log('INFO: Injected Failure: slot was incremented!')
                 operation = payload['operation']
                 if (client_id, request_count, 'forwarded_request', 'change_operation') in self.failures:
                     log_msg = 'INFO : Injecting Failure: Change Operation, Client: {} Message: {}'
