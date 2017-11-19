@@ -85,6 +85,13 @@ class Replica(process):
                     custom_log(log_msg.format(client_id, request_count))
                     testutil.crash()
                     return
+                # TODO: Parameterize Truncate History, ie. Drop only n statements in history
+                if (client_id, request_count, 'client_request', 'truncate_history') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Client Request: Truncate History, Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    failure_request_count = self.wedge_message_count + 1
+                    self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
+                    custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
                 if (client_id, request_count, 'client_request', 'increment_slot') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Client Request: Increment Slot), Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
@@ -130,6 +137,12 @@ class Replica(process):
                     custom_log(log_msg.format(client_id, request_count))
                     testutil.crash()
                     return
+                if (client_id, request_count, 'forwarded_request', 'truncate_history') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Forwarded Request: Truncate History, Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    failure_request_count = self.wedge_message_count + 1
+                    self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
+                    custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
                 if (client_id, request_count, 'forwarded_request', 'sleep') in self.failures:
                     sleep_time = self.failures[(client_id, request_count, 'forwarded_request', 'sleep')]
                     log_msg = 'Injecting Failure: Forwarded Request: Sleep for {} milliseconds, Client: {} Message: {}'
@@ -332,6 +345,12 @@ class Replica(process):
             log_msg = 'INFO: Injecting Failure: Request Shuttle: Drop, Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
             return
+        if (client_id, request_count, 'shuttle', 'truncate_history') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Request Shuttle: Truncate History, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
+            failure_request_count = self.wedge_message_count + 1
+            self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
+            custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
         if (client_id, request_count, 'shuttle', 'extra_op') in self.failures:
             log_msg = 'INFO: Injecting Failure: Request Shuttle: Extra Op), Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
@@ -434,6 +453,12 @@ class Replica(process):
             custom_log(log_msg.format(client_id, request_count))
             testutil.crash()
             return
+        if (client_id, request_count, 'result_shuttle', 'truncate_history') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Result Shuttle: Truncate History, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
+            failure_request_count = self.wedge_message_count + 1
+            self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
+            custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
         if (client_id, request_count, 'result_shuttle', 'invalid_order_sig') in self.failures:
             log_msg = 'INFO: Injecting Failure: Result Shuttle: Invalid Order Sig), Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
