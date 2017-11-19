@@ -33,6 +33,7 @@ class Replica(process):
         self.checkpointed_slot = 0
 
         # For Demo
+        # TODO: Add additional DS to track outgoing request shuttle to handle invalid order sig failure
         self.client_request_count = {cid: 0 for cid in self.client_processes.keys()}
         self.client_request_count[0] = 0
         self.forward_request_count = {cid: 0 for cid in self.client_processes.keys()}
@@ -84,6 +85,13 @@ class Replica(process):
                     custom_log(log_msg.format(client_id, request_count))
                     next(self.slot)
                     custom_log('INFO: Injected Failure: slot was incremented!')
+                if (client_id, request_count, 'client_request', 'invalid_order_sig') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Client Request: Invalid Order Sig), Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    failure_request_count = self.request_shuttle_count[0] + 1
+                    self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
+                    custom_log(
+                        'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
                 if (client_id, request_count, 'client_request', 'extra_op') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Client Request: Extra Op), Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
@@ -128,6 +136,13 @@ class Replica(process):
                     testutil.extra_op(self.running_state)
                     custom_log('INFO: Applied Extra Operation: put("a","a") to replica running state')
                     custom_log('INFO: Modified Running State: {}'.format(self.running_state))
+                if (client_id, request_count, 'forwarded_request', 'invalid_order_sig') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Forwarded Request: Invalid Order Sig), Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    failure_request_count = self.request_shuttle_count[0] + 1
+                    self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
+                    custom_log(
+                        'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
                 operation = payload['operation']
                 if (client_id, request_count, 'forwarded_request', 'change_operation') in self.failures:
                     log_msg = 'INFO : Injecting Failure: Change Operation, Client: {} Message: {}'
@@ -343,13 +358,22 @@ class Replica(process):
             operation = testutil.change_operation()
         order_statement = self.factory.new_order_statement(operation, prev_order_proof.slot)
         signed_order_statement = serialize_and_sign(order_statement)
-        if (0, request_shuttle_count[0], 'shuttle', 'invalid_order_sig') in self.failures:
+        if (client_id, request_count, 'shuttle', 'invalid_order_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Request Shuttle: Invalid Order Sig), Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
+            failure_request_count = self.request_shuttle_count[0] + 1
+            self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
+            custom_log(
+                'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+        if (0, self.request_shuttle_count[0], 'shuttle', 'invalid_order_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Request Shuttle: Invalid Order Sig, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
             signed_order_statement = fake_serialize_and_sign(order_statement)
         order_proof = self.factory.new_order_proof(prev_order_proof, signed_order_statement)
         result = op.apply_operation(self.running_state, operation)
         if (client_id, request_count, 'shuttle', 'change_result') in self.failures:
             log_msg = 'INFO: Injecting Failure: Change Result, Client: {} Message: {}'
-            custom_log(log_msg.format(self.replica_id, client_id, request_count))
+            custom_log(log_msg.format(client_id, request_count))
             result = testutil.change_result()
 
         result_statement = self.factory.new_result_statement(operation, result)
@@ -390,6 +414,13 @@ class Replica(process):
         self.result_shuttle_count[0] += 1
         self.result_shuttle_count[client_id] += 1
         request_count = self.result_shuttle_count[client_id]
+        if (client_id, request_count, 'result_shuttle', 'invalid_order_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Result Shuttle: Invalid Order Sig), Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
+            failure_request_count = self.request_shuttle_count[0] + 1
+            self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
+            custom_log(
+                'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
         if (client_id, request_count, 'result_shuttle', 'drop') in self.failures:
             log_msg = 'INFO: Injecting Failure: Result Shuttle: Drop, Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
@@ -536,6 +567,7 @@ class Replica(process):
         request_count = self.completed_checkpoint_count
         all_good = True
         # self.failures = [(2, 'completed_checkpoint', 'increment_slot'), (12, 'garbage', 'garbage')]
+        # TODO: FIX compile time errors, ex: request_shuttle_count[0] => self.request_shuttle_count[0]
         if (request_count, 'completed_checkpoint', 'crash') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: crash())'
             custom_log(log_msg.format(request_count))
