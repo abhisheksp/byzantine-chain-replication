@@ -71,6 +71,13 @@ class Replica(process):
             if is_verified:
                 custom_log('INFO: Received Client {} Request, Payload: {}'.format(client_id, operation))
                 custom_log('INFO: Client Signature Verification Successful!')
+                self.client_request_count[0] += 1
+                self.client_request_count[client_id] += 1
+                request_count = self.client_request_count[client_id]
+                if (client_id, request_count, 'client_request', 'drop') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Client Request: Drop, Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    return
                 handle_new_request(client_id, request_id, operation, signed_payload)
             else:
                 custom_log('INFO: Not Verified Client {} Request'.format(client_id))
@@ -85,12 +92,17 @@ class Replica(process):
                 client_id, request_id, client_signed_payload = payload['client_id'], payload['request_id'], payload['signed_payload']
                 log_msg = 'INFO: Received Forward Request from Replica {}, Client: {} RequestID: {}'
                 custom_log(log_msg.format(sender_replica_id, client_id, request_id))
+                self.forward_request_count[0] += 1
                 self.forward_request_count[client_id] += 1
                 request_count = self.forward_request_count[client_id]
+                if (client_id, request_count, 'forwarded_request', 'drop') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Forwarded Request: Drop, Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    return
                 if (client_id, request_count, 'forwarded_request', 'sleep') in self.failures:
                     sleep_time = self.failures[(client_id, request_count, 'forwarded_request', 'sleep')]
-                    log_msg = 'Injecting Failure: Forwarded Request({},{}): Sleep for {} milliseconds, Client: {} Message: {}'
-                    custom_log(log_msg.format(client_id, request_count, sleep_time, self.replica_id, client_id, request_count))
+                    log_msg = 'Injecting Failure: Forwarded Request: Sleep for {} milliseconds, Client: {} Message: {}'
+                    custom_log(log_msg.format(sleep_time, client_id, request_count))
                     testutil.sleep(sleep_time)
                 operation = payload['operation']
                 if (client_id, request_count, 'forwarded_request', 'change_operation') in self.failures:
@@ -155,7 +167,6 @@ class Replica(process):
         custom_log('INFO: Handling New Request ... ')
         custom_log('INFO: Running state before applying Operation:')
         output_running_state()
-        self.client_request_count[client_id] += 1
         request_count = self.client_request_count[client_id]
         if (client_id, request_count, 'client_request', 'change_operation') in self.failures:
             log_msg = 'Injecting Failure: Change Operation, Client: {} Message: {}'
@@ -163,8 +174,8 @@ class Replica(process):
             operation = testutil.change_operation()
         if (client_id, request_count, 'client_request', 'sleep') in self.failures:
             sleep_time = self.failures[(client_id, request_count, 'client_request', 'sleep')]
-            log_msg = 'Injecting Failure: Client Request({},{}) Sleep for {} milliseconds, Client: {} Message: {}'
-            custom_log(log_msg.format(client_id, request_count, sleep_time, self.replica_id, client_id, request_count))
+            log_msg = 'Injecting Failure: Client Request Sleep for {} milliseconds, Client: {} Message: {}'
+            custom_log(log_msg.format(sleep_time, client_id, request_count))
             testutil.sleep(sleep_time)
         next_slot = next(self.slot)
         custom_log('INFO: Assigning new slot: {}'.format(next_slot))
@@ -220,8 +231,8 @@ class Replica(process):
 
     def handle_retransmission_request(client_id, request_id, operation, signed_operation):
         custom_log('INFO: Retransmission Request, RID:{}, Client: {}'.format(request_id, client_id))
+        custom_log('INFO: Checking if Result present in Cache ...')
         if (client_id, request_id) in self.result_shuttle_cache:
-            custom_log('INFO: Checking if Result present in Cache ...')
             handle_recognized_request(client_id, request_id)
         else:
             custom_log('INFO: Result was not recognized. Forwarding request to head (case 2 and/or 3 in the paper)...')
@@ -259,6 +270,14 @@ class Replica(process):
     def handle_request_shuttle(prev_req_shuttle):
         custom_log('INFO: Replica received a request shuttle ... ')
         prev_order_proof, prev_result_proof = prev_req_shuttle.order_proof, prev_req_shuttle.result_proof
+        client_id, request_id = prev_order_proof.client_id, prev_order_proof.request_id
+        self.request_shuttle_count[0] += 1
+        self.request_shuttle_count[client_id] += 1
+        request_count = self.request_shuttle_count[client_id]
+        if (client_id, request_count, 'shuttle', 'drop') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Request Shuttle: Drop, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
+            return
         is_verified = verify_order_proof(prev_order_proof)
         next_slot = next(self.slot)
         if not is_verified or prev_order_proof.slot != next_slot:
@@ -273,10 +292,6 @@ class Replica(process):
         custom_log('INFO: Order statements verification (inside the request shuttle) successful')
         custom_log('INFO: Running state before applying Operation:')
         output_running_state()
-        client_id, request_id = prev_order_proof.client_id, prev_order_proof.request_id
-        self.request_shuttle_count[client_id] += 1
-        self.request_shuttle_count[0] += 1
-        request_count = self.request_shuttle_count[client_id]
         operation = prev_order_proof.operation
         custom_log('INFO: Verifying Operation ... ')
         signed_operation = prev_req_shuttle.signed_operation
@@ -288,8 +303,8 @@ class Replica(process):
             return
         if (client_id, request_count, 'shuttle', 'sleep') in self.failures:
             sleep_time = self.failures[(client_id, request_count, 'shuttle', 'sleep')]
-            log_msg = 'Injecting Failure: Request Shuttle ({},{}): Sleep for {} milliseconds, Client: {} Message: {}'
-            custom_log(log_msg.format(client_id, request_count, sleep_time, self.replica_id, client_id, request_count))
+            log_msg = 'INFO: Injecting Failure: Request Shuttle: Sleep for {} milliseconds, Client: {} Message: {}'
+            custom_log(log_msg.format(sleep_time, client_id, request_count))
             testutil.sleep(sleep_time)
 
         if (client_id, request_count, 'shuttle', 'change_operation') in self.failures:
@@ -342,14 +357,19 @@ class Replica(process):
         custom_log('INFO: Handling result shuttle ...')
         result_proof = result_shuttle.result_proof
         client_id, request_id = result_proof.client_id, result_proof.request_id
+        self.result_shuttle_count[0] += 1
         self.result_shuttle_count[client_id] += 1
         request_count = self.result_shuttle_count[client_id]
-        self.result_shuttle_count[0] += 1
+        if (client_id, request_count, 'result_shuttle', 'drop') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Result Shuttle: Drop, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
+            return
+
         result_proof = result_proof._asdict()
         if (client_id, request_count, 'result_shuttle', 'sleep') in self.failures:
             sleep_time = self.failures[(client_id, request_count, 'result_shuttle', 'sleep')]
-            log_msg = 'Injecting Failure: Result Request({},{}): Sleep for {} milliseconds, Client: {} Message: {}'
-            custom_log(log_msg.format(client_id, request_count, sleep_time, self.replica_id, client_id, request_count))
+            log_msg = 'Injecting Failure: Result Request: Sleep for {} milliseconds, Client: {} Message: {}'
+            custom_log(log_msg.format(sleep_time, client_id, request_count))
             testutil.sleep(sleep_time)
 
         if (client_id, request_count, 'result_shuttle', 'drop_result_stmt') in self.failures:

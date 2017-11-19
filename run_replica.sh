@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-echo "Deleting old log file: $LOG_FILE_PATH"
-rm $LOG_FILE_PATH
+#echo "Deleting old log file: $LOG_FILE_PATH"
+#rm $LOG_FILE_PATH
 echo 'Compiling DistAlgo files...'
 source compile.sh
 export IP_ADDR=`/sbin/ifconfig eth0 | grep 'inet addr' | cut -d: -f2 | awk '{print $1}'`

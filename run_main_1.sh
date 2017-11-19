@@ -6,6 +6,8 @@ echo 'Building new Replica Image'
 docker build -t replicanode_img .
 echo 'Deleting old log file: logs/main.log'
 rm logs/main.log
+echo 'Deleting old log file: logs/replica.log'
+rm logs/replica.log
 echo 'Compiling DistAlgo files...'
 source compile.sh
 export IP_ADDR=`/sbin/ifconfig docker0 |grep 'inet '| cut -d: -f2 | awk '{print $2}'`
