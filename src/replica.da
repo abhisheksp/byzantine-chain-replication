@@ -80,6 +80,11 @@ class Replica(process):
                     log_msg = 'INFO: Injecting Failure: Client Request: Drop, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
                     return
+                if (client_id, request_count, 'client_request', 'crash') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Client Request: Crash, Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    testutil.crash()
+                    return
                 if (client_id, request_count, 'client_request', 'increment_slot') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Client Request: Increment Slot), Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
@@ -119,6 +124,11 @@ class Replica(process):
                 if (client_id, request_count, 'forwarded_request', 'drop') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Forwarded Request: Drop, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
+                    return
+                if (client_id, request_count, 'forwarded_request', 'crash') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Forwarded Request: Crash, Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    testutil.crash()
                     return
                 if (client_id, request_count, 'forwarded_request', 'sleep') in self.failures:
                     sleep_time = self.failures[(client_id, request_count, 'forwarded_request', 'sleep')]
@@ -313,6 +323,11 @@ class Replica(process):
         self.request_shuttle_count[0] += 1
         self.request_shuttle_count[client_id] += 1
         request_count = self.request_shuttle_count[client_id]
+        if (client_id, request_count, 'shuttle', 'crash') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Request Shuttle: Crash, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
+            testutil.crash()
+            return
         if (client_id, request_count, 'shuttle', 'drop') in self.failures:
             log_msg = 'INFO: Injecting Failure: Request Shuttle: Drop, Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
@@ -414,6 +429,11 @@ class Replica(process):
         self.result_shuttle_count[0] += 1
         self.result_shuttle_count[client_id] += 1
         request_count = self.result_shuttle_count[client_id]
+        if (client_id, request_count, 'result_shuttle', 'crash') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Result Shuttle: Crash, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
+            testutil.crash()
+            return
         if (client_id, request_count, 'result_shuttle', 'invalid_order_sig') in self.failures:
             log_msg = 'INFO: Injecting Failure: Result Shuttle: Invalid Order Sig), Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
@@ -482,6 +502,7 @@ class Replica(process):
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: crash())'
             custom_log(log_msg.format(request_count))
             testutil.crash()
+            # TODO: change this log?
             custom_log('INFO: Replica Crashed!!')
         if (request_count, 'checkpoint', 'sleep') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: sleep())'
