@@ -9,4 +9,4 @@ rm logs/main.log
 echo 'Compiling DistAlgo files...'
 source compile.sh
 export IP_ADDR=`/sbin/ifconfig docker0 |grep 'inet '| cut -d: -f2 | awk '{print $2}'`
-python -m da -n MainNode --logfile --logfilename ../logs/main.log --logfilelevel info --message-buffer-size 100000 --hostname $IP_ADDR main.da -c single_client_workload.txt
+python -m da -n MainNode --logfile --logfilename ../logs/main.log --logfilelevel info --message-buffer-size 100000 --hostname $IP_ADDR main.da -c client_request_sleep.txt

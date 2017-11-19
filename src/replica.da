@@ -87,10 +87,10 @@ class Replica(process):
                 custom_log(log_msg.format(sender_replica_id, client_id, request_id))
                 self.forward_request_count[client_id] += 1
                 request_count = self.forward_request_count[client_id]
-                if (client_id, request_count, 'forward_request', 'sleep') in self.failures:
-                    sleep_time = self.failures[(client_id, request_count, 'forward_request', 'sleep')]
-                    log_msg = 'Injecting Failure: Sleep for {} milliseconds, Client: {} Message: {}'
-                    custom_log(log_msg.format(sleep_time, self.replica_id, client_id, request_count))
+                if (client_id, request_count, 'forwarded_request', 'sleep') in self.failures:
+                    sleep_time = self.failures[(client_id, request_count, 'forwarded_request', 'sleep')]
+                    log_msg = 'Injecting Failure: Forwarded Request({},{}): Sleep for {} milliseconds, Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count, sleep_time, self.replica_id, client_id, request_count))
                     testutil.sleep(sleep_time)
                 operation = payload['operation']
                 if (client_id, request_count, 'forwarded_request', 'change_operation') in self.failures:
@@ -163,8 +163,8 @@ class Replica(process):
             operation = testutil.change_operation()
         if (client_id, request_count, 'client_request', 'sleep') in self.failures:
             sleep_time = self.failures[(client_id, request_count, 'client_request', 'sleep')]
-            log_msg = 'Injecting Failure: Sleep for {} milliseconds, Client: {} Message: {}'
-            custom_log(log_msg.format(sleep_time, self.replica_id, client_id, request_count))
+            log_msg = 'Injecting Failure: Client Request({},{}) Sleep for {} milliseconds, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count, sleep_time, self.replica_id, client_id, request_count))
             testutil.sleep(sleep_time)
         next_slot = next(self.slot)
         custom_log('INFO: Assigning new slot: {}'.format(next_slot))
@@ -288,8 +288,8 @@ class Replica(process):
             return
         if (client_id, request_count, 'shuttle', 'sleep') in self.failures:
             sleep_time = self.failures[(client_id, request_count, 'shuttle', 'sleep')]
-            log_msg = 'Injecting Failure: Sleep for {} milliseconds, Client: {} Message: {}'
-            custom_log(log_msg.format(sleep_time, self.replica_id, client_id, request_count))
+            log_msg = 'Injecting Failure: Request Shuttle ({},{}): Sleep for {} milliseconds, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count, sleep_time, self.replica_id, client_id, request_count))
             testutil.sleep(sleep_time)
 
         if (client_id, request_count, 'shuttle', 'change_operation') in self.failures:
@@ -348,8 +348,8 @@ class Replica(process):
         result_proof = result_proof._asdict()
         if (client_id, request_count, 'result_shuttle', 'sleep') in self.failures:
             sleep_time = self.failures[(client_id, request_count, 'result_shuttle', 'sleep')]
-            log_msg = 'Injecting Failure: Sleep for {} milliseconds, Client: {} Message: {}'
-            custom_log(log_msg.format(sleep_time, self.replica_id, client_id, request_count))
+            log_msg = 'Injecting Failure: Result Request({},{}): Sleep for {} milliseconds, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count, sleep_time, self.replica_id, client_id, request_count))
             testutil.sleep(sleep_time)
 
         if (client_id, request_count, 'result_shuttle', 'drop_result_stmt') in self.failures:

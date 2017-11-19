@@ -17,7 +17,7 @@ class Olympus(process):
         self.docker_wrapper = DockerWrapper()
         self.replica_processes = {}
         custom_log('INFO: Olympus setup finished ...')
-        self.current_configuration = 0
+        self.current_configuration = 1
         self.factory = Message()
         self.wedge_message_counter = {}
         self.caught_up_message_counter = {}
@@ -215,7 +215,6 @@ class Olympus(process):
         lh_length = 0
         longest_history = []
         replica_id = 0
-        #custom_log('INFO: LH Slot:{}'.format(min_slot))
         for wedge_message in self.quorum:
             if wedge_message['checkpointed_slot'] == min_slot:
                 if len(wedge_message['history']) > lh_length:
@@ -264,10 +263,11 @@ class Olympus(process):
     def calculate_operations_diff(longest_history, wedge_message):
         diff = []
         w_history = wedge_message['history']
-        w_slot = w_history[-1]['slot']
-        for history in longest_history:
-            if history['slot'] > w_slot:
-                diff.append(history['operation'])
+        if w_history:
+            w_slot = w_history[-1]['slot']
+            for history in longest_history:
+                if history['slot'] > w_slot:
+                    diff.append(history['operation'])
         return diff
 
     def check_running_state_consistency():
