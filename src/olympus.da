@@ -35,6 +35,7 @@ class Olympus(process):
     def run():
         custom_log('INFO: Starting to run Olympus')
         client_count = config['num_client']
+        # TODO: implement multihost replicas for perform 900
         for client_id in range(1, client_count + 1):
             client_process = new(client.Client, args=(client_id, self.signature, self.config), at='ClientNode')
             self.client_processes[client_id] = client_process.pop()

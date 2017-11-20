@@ -42,6 +42,8 @@ class Replica(process):
         self.request_shuttle_count[0] = 0
         self.result_shuttle_count = {cid: 0 for cid in self.client_processes.keys()}
         self.result_shuttle_count[0] = 0
+        self.outgoing_request_shuttle_count = {cid: 0 for cid in self.client_processes.keys()}
+        self.outgoing_request_shuttle_count[0] = 0
         failure_scenarios = config['failure_scenarios']
         self.failures = failure_scenarios.get((self.current_configuration, self.replica_id), {})
         self.checkpoint_count = 0
@@ -99,7 +101,7 @@ class Replica(process):
                     next(self.slot)
                     custom_log('INFO: Injected Failure: slot was incremented!')
                 if (client_id, request_count, 'client_request', 'invalid_order_sig') in self.failures:
-                    log_msg = 'INFO: Injecting Failure: Client Request: Invalid Order Sig), Client: {} Message: {}'
+                    log_msg = 'INFO: Injecting Failure: Client Request: Invalid Order Sig, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
                     failure_request_count = self.request_shuttle_count[0] + 1
                     self.failures[(0, failure_request_count, 'shuttle', 'invalid_order_sig')] = None
@@ -111,7 +113,13 @@ class Replica(process):
                     testutil.extra_op(self.running_state)
                     custom_log('INFO: Applied Extra Operation: put("a","a") to replica running state')
                     custom_log('INFO: Modified Running State: {}'.format(self.running_state))
-
+                if (client_id, request_count, 'client_request', 'invalid_order_sig') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Client Request: Invalid Order Sig, Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+                    self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
+                    custom_log(
+                        'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
                 handle_new_request(client_id, request_id, operation, signed_payload)
             else:
                 custom_log('INFO: Not Verified Client {} Request'.format(client_id))
@@ -162,10 +170,10 @@ class Replica(process):
                     custom_log('INFO: Applied Extra Operation: put("a","a") to replica running state')
                     custom_log('INFO: Modified Running State: {}'.format(self.running_state))
                 if (client_id, request_count, 'forwarded_request', 'invalid_order_sig') in self.failures:
-                    log_msg = 'INFO: Injecting Failure: Forwarded Request: Invalid Order Sig), Client: {} Message: {}'
+                    log_msg = 'INFO: Injecting Failure: Forwarded Request: Invalid Order Sig, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
-                    failure_request_count = self.request_shuttle_count[0] + 1
-                    self.failures[(0, failure_request_count, 'shuttle', 'invalid_order_sig')] = None
+                    failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+                    self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
                     custom_log(
                         'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
                 operation = payload['operation']
@@ -245,6 +253,13 @@ class Replica(process):
         custom_log('INFO: Assigning new slot: {}'.format(next_slot))
         order_statement = self.factory.new_order_statement(operation, next_slot)
         signed_order_statement = serialize_and_sign(order_statement)
+        self.outgoing_request_shuttle_count[0] += 1
+        self.outgoing_request_shuttle_count[client_id] += 1
+        outgoing_shuttle_count = self.outgoing_request_shuttle_count[0]
+        if (0, outgoing_shuttle_count, 'outgoing_shuttle', 'invalid_order_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Outgoing Request Shuttle: Invalid Order Sig, Outgoing Shuttle Count: {}'
+            custom_log(log_msg.format(outgoing_shuttle_count))
+            signed_order_statement = fake_serialize_and_sign(order_statement)
         new_order_proof_details = {
             'client_id': client_id,
             'request_id': request_id,
@@ -360,17 +375,28 @@ class Replica(process):
             testutil.extra_op(self.running_state)
             custom_log('INFO: Applied Extra Operation: put("a","a") to replica running state')
             custom_log('INFO: Modified Running State: {}'.format(self.running_state))
+        if (client_id, request_count, 'shuttle', 'invalid_order_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Request Shuttle: Invalid Order Sig, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
+            failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
+            custom_log(
+                'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
         is_verified = verify_order_proof(prev_order_proof)
         next_slot = next(self.slot)
-        if not is_verified or prev_order_proof.slot != next_slot:
-            if prev_order_proof.slot != next_slot:
-                custom_log('INFO: Verification failed! slot Hole was found!')
-            custom_log('INFO: Verification failed. Replica found a proof of misbehaviour ... ')
-            proof_of_misbehaviour = 'Signature Verification Failed or Slot Hole found'
-            self.mode = Mode.IMMUTABLE
+        if not is_verified:
             custom_log('INFO: Replica changed to IMMUTABLE')
+            self.mode = Mode.IMMUTABLE
+            proof_of_misbehaviour = 'Order Proof Verification failed'
             send_reconfiguration_request(proof_of_misbehaviour)
             return
+        if prev_order_proof.slot != next_slot:
+            custom_log('INFO: Replica changed to IMMUTABLE')
+            self.mode = Mode.IMMUTABLE
+            proof_of_misbehaviour = 'Slot Hole Found'
+            send_reconfiguration_request(proof_of_misbehaviour)
+            return
+
         custom_log('INFO: Order statements verification (inside the request shuttle) successful')
         custom_log('INFO: Running state before applying Operation:')
         output_running_state()
@@ -395,16 +421,12 @@ class Replica(process):
             operation = testutil.change_operation()
         order_statement = self.factory.new_order_statement(operation, prev_order_proof.slot)
         signed_order_statement = serialize_and_sign(order_statement)
-        if (client_id, request_count, 'shuttle', 'invalid_order_sig') in self.failures:
-            log_msg = 'INFO: Injecting Failure: Request Shuttle: Invalid Order Sig), Client: {} Message: {}'
-            custom_log(log_msg.format(client_id, request_count))
-            failure_request_count = self.request_shuttle_count[0] + 1
-            self.failures[(0, failure_request_count, 'shuttle', 'invalid_order_sig')] = None
-            custom_log(
-                'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
-        if (0, self.request_shuttle_count[0], 'shuttle', 'invalid_order_sig') in self.failures:
-            log_msg = 'INFO: Injecting Failure: Request Shuttle: Invalid Order Sig, Client: {} Message: {}'
-            custom_log(log_msg.format(client_id, request_count))
+        self.outgoing_request_shuttle_count[0] += 1
+        self.outgoing_request_shuttle_count[client_id] += 1
+        outgoing_shuttle_count = self.outgoing_request_shuttle_count[0]
+        if (0, outgoing_shuttle_count, 'outgoing_shuttle', 'invalid_order_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Outgoing Request Shuttle: Invalid Order Sig, Outgoing Shuttle Count: {}'
+            custom_log(log_msg.format(outgoing_shuttle_count))
             signed_order_statement = fake_serialize_and_sign(order_statement)
         order_proof = self.factory.new_order_proof(prev_order_proof, signed_order_statement)
         result = op.apply_operation(self.running_state, operation)
@@ -464,10 +486,10 @@ class Replica(process):
             self.failures[(0, failure_request_count, 'wedge', 'truncate_history')] = n
             custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
         if (client_id, request_count, 'result_shuttle', 'invalid_order_sig') in self.failures:
-            log_msg = 'INFO: Injecting Failure: Result Shuttle: Invalid Order Sig), Client: {} Message: {}'
+            log_msg = 'INFO: Injecting Failure: Result Shuttle: Invalid Order Sig, Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
-            failure_request_count = self.request_shuttle_count[0] + 1
-            self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
+            failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
             custom_log(
                 'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
         if (client_id, request_count, 'result_shuttle', 'drop') in self.failures:
@@ -762,7 +784,7 @@ class Replica(process):
         send(forward_request, to=self.head)
 
     def send_reconfiguration_request(proof_of_misbehaviour):
-        custom_log('Raising Reconfiguration Request ... : {}'.format(proof_of_misbehaviour))
+        custom_log('Raising Reconfiguration Request: {}'.format(proof_of_misbehaviour))
         type_ = 'replica'
         signed_message = serialize_and_sign(proof_of_misbehaviour)
         reconfig_request = self.factory.new_reconfiguration_request(type_, signed_message, self.current_configuration)
@@ -795,13 +817,15 @@ class Replica(process):
 
     def verify_checkpoint_proof(checkpoint_proof):
         custom_log('INFO: Checkpoint Proof Verification')
-        #TO DO - Verification logic
+        # TODO - Verification logic
         return True
+
     def validate_completed_checkpoint(checkpoint_proof):
         number_of_failures_tolerable = (self.config['replica_count'] - 1) // 2
         if len(checkpoint_proof['checkpoint_statements']) >   number_of_failures_tolerable:
             return True
         return False
+
     def persist_checkpoint_info(checkpoint_statements):
         for statement in checkpoint_statements:
             if statement['replica_id'] == self.replica_id:
@@ -819,7 +843,6 @@ class Replica(process):
             if not is_verified or slot_number != order_stmt['slot'] or operation != order_stmt['operation']:
                 is_order_proof_verified = False
                 break
-        custom_log('INFO: Order Proof verification (True/False): {}'.format(is_order_proof_verified))
         return is_order_proof_verified
 
     def verify_result_statements_sign(signed_result_statements):
