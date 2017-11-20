@@ -100,13 +100,6 @@ class Replica(process):
                     custom_log(log_msg.format(client_id, request_count))
                     next(self.slot)
                     custom_log('INFO: Injected Failure: slot was incremented!')
-                if (client_id, request_count, 'client_request', 'invalid_order_sig') in self.failures:
-                    log_msg = 'INFO: Injecting Failure: Client Request: Invalid Order Sig, Client: {} Message: {}'
-                    custom_log(log_msg.format(client_id, request_count))
-                    failure_request_count = self.request_shuttle_count[0] + 1
-                    self.failures[(0, failure_request_count, 'shuttle', 'invalid_order_sig')] = None
-                    custom_log(
-                        'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
                 if (client_id, request_count, 'client_request', 'extra_op') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Client Request: Extra Op), Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
@@ -118,6 +111,13 @@ class Replica(process):
                     custom_log(log_msg.format(client_id, request_count))
                     failure_request_count = self.outgoing_request_shuttle_count[0] + 1
                     self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
+                    custom_log(
+                        'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+                if (client_id, request_count, 'client_request', 'invalid_result_sig') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Client Request: Invalid Result Sig, Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+                    self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_result_sig')] = None
                     custom_log(
                         'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
                 handle_new_request(client_id, request_id, operation, signed_payload)
@@ -174,6 +174,13 @@ class Replica(process):
                     custom_log(log_msg.format(client_id, request_count))
                     failure_request_count = self.outgoing_request_shuttle_count[0] + 1
                     self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
+                    custom_log(
+                        'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+                if (client_id, request_count, 'forwarded_request', 'invalid_result_sig') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Forwarded Request: Invalid Result Sig, Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+                    self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_result_sig')] = None
                     custom_log(
                         'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
                 operation = payload['operation']
@@ -279,6 +286,10 @@ class Replica(process):
         order_proof = self.factory.new_order_proof(empty_order_proof, signed_order_statement)
         result_statement = self.factory.new_result_statement(operation, result)
         signed_result_statement = serialize_and_sign(result_statement)
+        if (0, outgoing_shuttle_count, 'outgoing_shuttle', 'invalid_result_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Outgoing Request Shuttle: Invalid Result Sig, Shuttle Count: {}'
+            custom_log(log_msg.format(outgoing_shuttle_count))
+            signed_result_statement = fake_serialize_and_sign(result_statement)
         new_result_proof_details = {
             'client_id': client_id,
             'request_id': request_id,
@@ -382,6 +393,13 @@ class Replica(process):
             self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
             custom_log(
                 'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+        if (client_id, request_count, 'shuttle', 'invalid_result_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Request Shuttle: Invalid Result Sig, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
+            failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_result_sig')] = None
+            custom_log(
+                'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
         is_verified = verify_order_proof(prev_order_proof)
         next_slot = next(self.slot)
         if not is_verified:
@@ -437,6 +455,10 @@ class Replica(process):
 
         result_statement = self.factory.new_result_statement(operation, result)
         signed_result_statement = serialize_and_sign(result_statement)
+        if (0, outgoing_shuttle_count, 'outgoing_shuttle', 'invalid_result_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Outgoing Request Shuttle: Invalid Result Sig, Shuttle Count: {}'
+            custom_log(log_msg.format(outgoing_shuttle_count))
+            signed_result_statement = fake_serialize_and_sign(result_statement)
         result_proof = self.factory.new_result_proof(prev_result_proof, signed_result_statement)
 
         if (client_id, request_count, 'shuttle', 'drop_result_stmt') in self.failures:
@@ -490,6 +512,13 @@ class Replica(process):
             custom_log(log_msg.format(client_id, request_count))
             failure_request_count = self.outgoing_request_shuttle_count[0] + 1
             self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
+            custom_log(
+                'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+        if (client_id, request_count, 'result_shuttle', 'invalid_result_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Result Shuttle: Invalid Result Sig, Client: {} Message: {}'
+            custom_log(log_msg.format(client_id, request_count))
+            failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_result_sig')] = None
             custom_log(
                 'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
         if (client_id, request_count, 'result_shuttle', 'drop') in self.failures:
