@@ -322,34 +322,38 @@ class Replica(process):
     def handle_retransmission_request(client_id, request_id, operation, signed_operation):
         custom_log('INFO: Retransmission Request, RID:{}, Client: {}'.format(request_id, client_id))
         custom_log('INFO: Checking if Result present in Cache ...')
-        if (client_id, request_id) in self.result_shuttle_cache:
-            handle_recognized_request(client_id, request_id)
-        else:
-            custom_log('INFO: Result was not recognized. Forwarding request to head (case 2 and/or 3 in the paper)...')
+        if (client_id, request_id) not in self.result_shuttle_cache:
+            custom_log('INFO: Request was not recognized, Request : {}'.format(request_id))
             handle_unrecognized_request(client_id, request_id, operation, signed_operation)
+        handle_recognized_request(client_id, request_id)
 
     def handle_recognized_request(client_id, request_id):
-        custom_log('INFO: Handle recognised request ...')
+
+        def is_recognized_request():
+            return (client_id, request_id) in self.result_shuttle_cache
+
+        def is_result_shuttle_present():
+            return self.result_shuttle_cache[(client_id, request_id)] is not None
+
+        custom_log('INFO: Start Retransmission Response timer after recognizing the request ...')
         req_timeout = self.head_timeout if self.is_head else self.non_head_timeout
-        if await(self.result_shuttle_cache[(client_id, request_id)] is not None):
-            pass
+        if await(is_recognized_request() and is_result_shuttle_present()):
+            custom_log('INFO: Result Shuttle available in cache, Request: {}'.format(request_id))
+            result_shuttle = self.result_shuttle_cache[(client_id, request_id)]
+            result, result_proof = result_shuttle.result, result_shuttle.result_proof._asdict()
+            result_shuttle_payload = {'result': result,'result_proof': result_proof}
+            signed_result_shuttle_payload = serialize_and_sign(result_shuttle_payload)
+            custom_log('INFO: Signed Result Shuttle : {}'.format(signed_result_shuttle_payload))
+            send_response_to_client(client_id, signed_result_shuttle_payload)
         elif timeout(req_timeout):
-            self.mode = Mode.IMMUTABLE
-            proof_of_misbehaviour = 'Recognized Request Timed Out'
-            custom_log('INFO: Replica timed out after recognizing the request ... Raising reconfigure request ...')
             custom_log('INFO: Replica changed to IMMUTABLE')
+            self.mode = Mode.IMMUTABLE
+            proof_of_misbehaviour = 'Retransmission Request Timed Out'
             send_reconfiguration_request(proof_of_misbehaviour)
-            return
-        result_shuttle = self.result_shuttle_cache[(client_id, request_id)]
-        result_shuttle_payload = serialize_and_sign({'result': result_shuttle.result,
-                                                     'result_proof': result_shuttle.result_proof._asdict()})
-        custom_log('INFO: Signed Result Shuttle : {}'.format(result_shuttle_payload))
-        send_response_to_client(client_id, result_shuttle_payload)
 
     def handle_unrecognized_request(client_id, request_id, operation, signed_operation):
         if self.is_head:
             custom_log('INFO: Head does not recognize the operation. Treating it as new request ...')
-            # Case: New Request
             handle_new_request(client_id, request_id, operation, signed_operation)
         else:
             forward_request_payload = {'client_id': client_id, 'request_id': request_id, 'operation': operation, 'signed_payload': signed_operation}
