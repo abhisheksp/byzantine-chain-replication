@@ -85,20 +85,22 @@ class Client(process):
         custom_log('INFO: Request New Configuration from Olympus')
 
     def send_request(operation, receiver):
-        serialized_payload = serialize_and_sign(operation)
-        request = self.factory.new_request(serialized_payload)
-        request_id = request[1]['request_id']
-        self.request_count += 1
-        self.pending_requests.add(request_id)
-        send_configuration_request()
-        send(request, to=receiver)
-        log_msg = 'INFO: Sending Request, RequestID: {}, Receiver: {}, Operation: {}'
-        custom_log(log_msg.format(request_id, receiver, operation))
-        if await(request_id not in self.pending_requests):
-            pass
-        elif timeout(self.request_timeout):
-            custom_log('INFO: Request Timed Out')
-            retransmit_request(request_id, operation)
+        custom_log('INFO: Checking for any pending requests')
+        if await(len(self.pending_requests) == 0):
+            serialized_payload = serialize_and_sign(operation)
+            request = self.factory.new_request(serialized_payload)
+            request_id = request[1]['request_id']
+            self.request_count += 1
+            self.pending_requests.add(request_id)
+            send_configuration_request()
+            send(request, to=receiver)
+            log_msg = 'INFO: Sending Request, RequestID: {}, Receiver: {}, Operation: {}'
+            custom_log(log_msg.format(request_id, receiver, operation))
+            if await(request_id not in self.pending_requests):
+                pass
+            elif timeout(self.request_timeout):
+                custom_log('INFO: Request Timed Out')
+                retransmit_request(request_id, operation)
 
     def send_configuration_request():
         if self.request_count % 10 == 0:
