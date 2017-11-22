@@ -258,7 +258,6 @@ class Olympus(process):
         self.total_caught_up_messages += 1
 
     def send_catch_up_messages(longest_history, replica_id):
-        diff_in_history = []
         for wedge_message in self.quorum:
             if wedge_message['replica_id'] != replica_id:
                 diff_operations = calculate_operations_diff(longest_history, wedge_message)
@@ -374,9 +373,8 @@ class Olympus(process):
             replica_id = wedge_message['replica_id']
             message = {'message': 'Get Running State'}
             # ToDo: Sign this message
-            custom_log(
-                'INFO: (Get Running State) Requesting hashed running state of replica {} (which is present in the quorum)'.format(
-                    replica_id))
+            log_msg = 'INFO: (Get Running State) Requesting hashed running state of replica {} (which is present in the quorum)'
+            custom_log(log_msg.format(replica_id))
             recepient = self.replica_processes[wedge_message['replica_id']]
             send(('get_running_state', message), to=recepient)
             if await(bool(self.running_states)):
@@ -453,12 +451,7 @@ class Olympus(process):
     def running_states_equal(values):
         if not values:
             return False
-        rs_1 = values[0]
-        # TODO: use all
-        for rs in values:
-            if rs != rs_1:
-                return False
-        return True
+        return bool(values) and all(rs == values[0] for rs in values)
 
     def display_quorum_replica():
         replicas_str = ', '.join(map(lambda x: x['replica_id'], self.quorum))
