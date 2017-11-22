@@ -1213,7 +1213,7 @@ class Replica(process):
             send(result_shuttle, to=self.prev_replica)
 
     def forward_to_head(forward_request):
-        custom_log('Sending Forward Request to Head')
+        custom_log('INFO: Sending Forward Request to Head')
         send(forward_request, to=self.head)
 
     def send_reconfiguration_request(proof_of_misbehaviour):
