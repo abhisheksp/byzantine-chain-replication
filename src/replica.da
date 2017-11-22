@@ -31,7 +31,7 @@ class Replica(process):
         self.olympus = None
         self.head_timeout = (config['head_timeout']/1000)
         self.non_head_timeout = (config['nonhead_timeout']/1000)
-        self.current_configuration = 1
+        self.current_configuration = config['current_configuration']
         self.checkpointed_slot = 0
         self.cached_result = {}
 

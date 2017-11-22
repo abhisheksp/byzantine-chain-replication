@@ -124,7 +124,6 @@ class Client(process):
             custom_log('INFO: Request Completed, Request: {}'.format(request_id))
 
     def send_configuration_request(with_check=True):
-        custom_log('send config req: {}'.format(with_check))
         if not with_check or self.request_count % 10 == 0:
             custom_log('INFO: Sending New Configuration Request')
             empty_payload = serialize_and_sign({})

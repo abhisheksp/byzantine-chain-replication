@@ -6,4 +6,6 @@ docker rm replicanode2  -f
 docker rm replicanode3  -f
 docker rm replicanode4  -f
 docker rm replicanode5  -f
+docker rm replicanode6  -f
+docker rm replicanode7  -f
 docker rmi replicanode_img

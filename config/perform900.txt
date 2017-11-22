@@ -9,6 +9,8 @@ test_case_name = perform900
 #  linux, mac os: grep --count result_message tail.log
 #  windows (in PowerShell): find /C `"result_message`" tail.log
 
+checkpt_interval = 7
+
 # number of failures to tolerate.  number of replicas is 2t+1.
 t = 2
 # number of clients
