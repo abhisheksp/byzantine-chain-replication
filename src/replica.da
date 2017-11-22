@@ -6,7 +6,8 @@ import operation as op
 from constants import Mode
 from message import Message
 from slot import Slot
-
+import nacl.hash
+import nacl.encoding
 
 class Replica(process):
     def setup(client_processes, replica_id, signature, config):
@@ -503,6 +504,7 @@ class Replica(process):
     def handle_result_shuttle(result_shuttle):
         custom_log('INFO: Handling result shuttle ...')
         result_proof = result_shuttle.result_proof
+        result = result_shuttle.result
         client_id, request_id = result_proof.client_id, result_proof.request_id
         self.result_shuttle_count[0] += 1
         self.result_shuttle_count[client_id] += 1
@@ -543,19 +545,18 @@ class Replica(process):
             testutil.extra_op(self.running_state)
             custom_log('INFO: Applied Extra Operation: put("a","a") to replica running state')
             custom_log('INFO: Modified Running State: {}'.format(self.running_state))
-
-        result_proof = result_proof._asdict()
         if (client_id, request_count, 'result_shuttle', 'sleep') in self.failures:
             sleep_time = self.failures[(client_id, request_count, 'result_shuttle', 'sleep')]
             log_msg = 'Injecting Failure: Result Request: Sleep for {} milliseconds, Client: {} Message: {}'
             custom_log(log_msg.format(sleep_time, client_id, request_count))
             testutil.sleep(sleep_time)
-
         if (client_id, request_count, 'result_shuttle', 'drop_result_stmt') in self.failures:
             log_msg = 'INFO: Dropping Result Stmt, Client: {} Message: {}'
             custom_log(log_msg.format(self.replica_id, client_id, request_count))
             result_proof = testutil.drop_result_stmt(result_proof)
-        is_verified = verify_result_statements_sign(result_proof['result_statements'])
+
+        result_proof = result_proof._asdict()
+        is_verified = verify_result_statements(result, result_proof['result_statements'])
         if is_verified:
             custom_log('INFO: Result Shuttle Verified... Caching Result ...')
             self.result_shuttle_cache[(client_id, request_id)] = result_shuttle
@@ -935,15 +936,16 @@ class Replica(process):
                 break
         return is_order_proof_verified
 
-    def verify_result_statements_sign(signed_result_statements):
+    def verify_result_statements(result, signed_result_statements):
+        results = []
+        hashed_result = nacl.hash.sha256(bytes(result, 'utf-8'), encoder=nacl.encoding.HexEncoder)
         for i, signed_result_statement in enumerate(signed_result_statements):
             rep_id = i + 1
             is_verified, result_statement = self.signature.verify_replica(rep_id, signed_result_statement)
             if not is_verified:
-                custom_log('INFO: Result statement verification failed !')
                 return False
-        custom_log('INFO: Result Statements Verification Successful')
-        return True
+            results.append(result_statement['result'])
+        return all(r == hashed_result for r in results)
 
     def verify_operation(client_id, operation, signed_operation):
         is_verified, unsigned_operation = self.signature.verify_client(client_id, signed_operation)

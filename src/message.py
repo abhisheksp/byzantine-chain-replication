@@ -28,14 +28,14 @@ class Message:
         'checkpoint_statements'
     )
 
-    ResultStatement = namedtuple('OrderStatement', 'result operation replica_id')
+    ResultStatement = namedtuple('ResultStatement', 'result operation replica_id')
     ResultProof = namedtuple(
         'ResultProof',
         'client_id request_id result operation configuration result_statements'
     )
     RequestShuttle = namedtuple('RequestShuttle', 'order_proof result_proof signed_operation')
-    CheckPointShuttle =  namedtuple('CheckPointShuttle', 'checkpoint_proof')
-    ResultShuttle = namedtuple('ResponseShuttle', 'result result_proof')
+    CheckPointShuttle = namedtuple('CheckPointShuttle', 'checkpoint_proof')
+    ResultShuttle = namedtuple('ResultShuttle', 'result result_proof')
 
     def __init__(self, identifier=None):
         self.identifier = identifier
