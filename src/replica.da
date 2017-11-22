@@ -31,6 +31,8 @@ class Replica(process):
         self.non_head_timeout = config['nonhead_timeout']
         self.current_configuration = 1
         self.checkpointed_slot = 0
+        self.cached_result = {}
+
 
         # For Demo
         # TODO: Add additional DS to track outgoing request shuttle to handle invalid order sig failure
@@ -277,6 +279,7 @@ class Replica(process):
         }
 
         result = op.apply_operation(self.running_state, operation)
+        self.cached_result[client_id] = {'request_id': request_id, 'operation': operation, 'result': result}
 
         if (client_id, request_count, 'client_request', 'change_result') in self.failures:
             log_msg = 'Injecting Failure: Change Result, Client: {} Message: {}'
@@ -308,7 +311,9 @@ class Replica(process):
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof, 'signed_operation': signed_operation}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
         self.result_shuttle_cache[(client_id, request_id)] = None
-        self.history.append(order_proof)
+        history_order_proof = order_proof
+        history_order_proof['signed_operation'] = signed_operation
+        self.history.append(history_order_proof)
         custom_log('INFO: Order Proof (with signed order statements): {}'.format(order_proof))
         custom_log('INFO: Result Proof (with signed result statements): {}'.format(result_proof))
         forward_request_shuttle(request_shuttle)
@@ -452,6 +457,7 @@ class Replica(process):
             signed_order_statement = fake_serialize_and_sign(order_statement)
         order_proof = self.factory.new_order_proof(prev_order_proof, signed_order_statement)
         result = op.apply_operation(self.running_state, operation)
+        self.cached_result[client_id] = {'request_id': request_id, 'operation': operation, 'result': result}
         if (client_id, request_count, 'shuttle', 'change_result') in self.failures:
             log_msg = 'INFO: Injecting Failure: Change Result, Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
@@ -473,7 +479,9 @@ class Replica(process):
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof, 'signed_operation': signed_operation}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
         self.result_shuttle_cache[(client_id, request_id)] = None
-        self.history.append(order_proof)
+        history_order_proof = order_proof
+        history_order_proof['signed_operation'] = signed_operation
+        self.history.append(history_order_proof)
         custom_log('INFO: Order Proof (with signed order statements): {}'.format(order_proof))
         custom_log('INFO: Result Proof (with signed result statements): {}'.format(result_proof))
         forward_request_shuttle(request_shuttle)
@@ -743,6 +751,12 @@ class Replica(process):
                 custom_log(log_msg.format(sender_replica_id, payload))
                 next_checkpoint_proof = payload['checkpoint_proof']
                 handle_completed_checkpoint_proof(next_checkpoint_proof)
+            else:
+                custom_log('INFO: Completed Checkpoint Proof Verification failed')
+                custom_log('INFO: Raising reconfiguration request')
+                self.mode = Mode.IMMUTABLE
+                proof_of_misbehaviour = 'Checkpoint Proof Verification Failed'
+                send_reconfiguration_request(proof_of_misbehaviour)
 
     def handle_completed_checkpoint_proof(next_checkpoint_proof):
         is_valid_checkpoint = validate_completed_checkpoint(next_checkpoint_proof)
@@ -755,8 +769,12 @@ class Replica(process):
             persist_checkpoint_info(next_checkpoint_proof['checkpoint_statements'])
             forward_checkpoint_result(checkpoint_result)
         if not is_valid_checkpoint:
-            custom_log('INFO: Completed Checkpoint Proof validation failed')
-            custom_log('INFO: Less than "t" number replicas have added checkpoint proofs!')
+            custom_log('INFO: Completed Checkpoint Proof Validation failed')
+            custom_log('INFO: Raising reconfiguration request')
+            self.mode = Mode.IMMUTABLE
+            proof_of_misbehaviour = 'Checkpoint Proof Validation Failed'
+            send_reconfiguration_request(proof_of_misbehaviour)
+
 
     def forward_checkpoint_request(checkpoint_request):
         if not self.is_tail:
@@ -769,7 +787,7 @@ class Replica(process):
             send(checkpoint_result, to=self.prev_replica)
 
     def receive(msg=('wedge_request', payload)):
-        custom_log('INFO: Wedge Request Received!: {}'.format(payload))
+        custom_log('INFO: Replica received a wedge request from Olympus')
         wedge_message = {
         'replica_id': self.replica_id,
         'history': self.history,
@@ -777,20 +795,42 @@ class Replica(process):
         'running_state': self.running_state,
         'checkpointed_slot': self.checkpointed_slot
         }
+        custom_log('INFO: Sending wedge statement to Olympus')
         send(('wedge_message', wedge_message), to=self.olympus)
 
     def receive(msg=('catch_up', payload)):
-        custom_log('INFO: Received Catch Up Message from Olympus:')
-        custom_log('Operations to catchup: {}'.format(payload))
+        custom_log('INFO: Received Catch Up Message from Olympus')
+        operations_list = []
+        for orderproof in payload:
+            operations_list.append(orderproof['operation'])
+        if not operations_list:
+            custom_log('INFO: All operations are caught up')
+        else:
+            custom_log('INFO: Operations to catchup: {}'.format(operations_list))
         hashed_running_state = ''
-        for operation in payload:
+        for operation in operations_list:
             result = op.apply_operation(self.running_state, operation)
+        if len(payload) > 1:
+            self.cached_result[payload[-1]['client_id']] = {'request_id': payload[-1]['request_id'], 'operation': payload[-1]['operation'], 'result': result}
         caught_up = {
             'hashed_running_state': self.running_state,
             'replica_id': self.replica_id,
-            'replica_config': self.current_configuration
+            'replica_config': self.current_configuration,
+            'cached_result': self.cached_result
         }
+        custom_log('INFO: Sending caught up message to Olympus')
         send(('caught_up',caught_up ), to = self.olympus)
+
+    def receive(msg=('get_running_state', payload)):
+        custom_log('INFO: Received "get running state" message from Olympus')
+        self.running_state_count += 1
+        state = {
+            'replica_id': self.replica_id,
+            'replica_config': self.current_configuration,
+            'running_state': self.running_state
+        }
+        custom_log('INFO: Sending hashed running state to Olympus')
+        send(('running_state', state), to = self.olympus)
 
 
     def serialize_and_sign(payload):
@@ -855,9 +895,26 @@ class Replica(process):
 
     def validate_completed_checkpoint(checkpoint_proof):
         number_of_failures_tolerable = (self.config['replica_count'] - 1) // 2
-        if len(checkpoint_proof['checkpoint_statements']) >   number_of_failures_tolerable:
-            return True
-        return False
+        if len(checkpoint_proof['checkpoint_statements'])  <=  number_of_failures_tolerable:
+            return False
+        checkpoint_statements = checkpoint_proof['checkpoint_statements']
+        signed_running_state = {}
+        checkpoint_slot = 0
+        for statements in checkpoint_statements:
+            if self.replica_id == statements['replica_id']:
+                signed_running_state = statements['signed_running_state']
+                checkpoint_slot = statements['slot']
+        custom_log('INFO: (checkpoint_slot): {} '.format(checkpoint_slot))
+        custom_log('INFO: (signed_running_state): {} '.format(signed_running_state))
+        for statements in checkpoint_statements:
+            if checkpoint_slot == statements['slot']:
+                _, rs_1 = signature.verify_replica(self.replica_id, signed_running_state)
+                is_verified, rs_2 = signature.verify_replica(statements['replica_id'], statements['signed_running_state'])
+                if not is_verified:
+                    return False
+                if rs_1 != rs_2:
+                    return False
+        return True
 
     def persist_checkpoint_info(checkpoint_statements):
         for statement in checkpoint_statements:
@@ -904,6 +961,10 @@ class Replica(process):
 
     def custom_log(log_message):
         output('Replica: {} {}'.format(self.replica_id, log_message))
+
+    def receive(msg=('kill',)):
+        custom_log('Terminating')
+        testutil.crash()
 
     def failure_injection():
         # For Explicit Test Cases
