@@ -30,7 +30,7 @@ hosts = localhost; 192.168.0.3; 192.168.0.4
 client_hosts = 1; 0; 0
 # host on which each replica runs.  same in all configurations.
 replica_hosts = 0; 1; 2
-
+checkpt_interval = 7
 # CLIENT WORKLOAD
 workload[0] = pseudorandom(233,20)
 
@@ -41,7 +41,7 @@ workload[0] = pseudorandom(233,20)
 # failure scenario are failure-free.
 #failures[0,0] = client_request(2,1), crash()
 #failures[1,2] = result_shuttle(0,1),drop(); shuttle(1,3),omit_send()
-failures[0,1] = completed_checkpoint(1),drop_checkpt_stmts()
+failures[0,1] = completed_checkpoint(0),drop(); wedge_request(0),crash()
 
 # Custom Config
 test_case = 1

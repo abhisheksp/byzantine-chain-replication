@@ -199,6 +199,12 @@ def drop(request):
         return 'ignore_messages'
     elif request == 'completed_checkpoint':
         return 'ignore_messages'
+    elif request == 'wedge_request':
+        return 'ignore_messages'
+    elif request == 'catch_up':
+        return 'ignore_messages'
+    elif request == 'get_running_state':
+        return 'ignore_messages'
 
 
 def extra_op(cur_running_state):
@@ -223,3 +229,9 @@ def drop_checkpoint_statements(r_statements, r):
     if len(r_statements) > t:
         r_statements = r_statements[t+1:]
     return r_statements
+
+def truncate_history(history, n):
+    if len(history) < n:
+        return False, history
+    history = history[:-n]
+    return True, history

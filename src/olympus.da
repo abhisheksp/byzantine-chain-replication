@@ -160,19 +160,23 @@ class Olympus(process):
             custom_log('INFO: (Reconfiguration) Wedge requests are already sent for this configuration')
 
     def receive(msg=('wedge_message', payload)):
-        replica_id = payload['replica_id']
-        replica_config = payload['replica_config']
-        checkpointed_slot = payload['checkpointed_slot']
-        replica_history = payload['history']
-        replica_running_state = payload['running_state']
-        custom_log('INFO: (Wedge Message) Received Wedge Message from Replica {}'.format(replica_id))
-        custom_log('INFO: (Wedge Message) Checkpointed Slot: {}'.format(checkpointed_slot))
-        custom_log('INFO: (Wedge Message) Replica Config: {}'.format(replica_config))
-        custom_log('INFO: (Wedge Message) Running_state: {}'.format(replica_running_state))
-        custom_log('INFO: (Wedge Message) History: {}'.format(replica_history))
-        self.wedge_message_counter[replica_config] += 1
-        self.wedge_messages[replica_config].append(payload)
-        self.total_wedge_messages += 1
+        is_verified, payload = self.signature.verify_replica(payload['replica_id'],payload['payload'])
+        if is_verified:
+            replica_id = payload['replica_id']
+            custom_log('INFO: Received and Verified Wedge Message from Replica {}'.format(replica_id))
+            replica_config = payload['replica_config']
+            checkpointed_slot = payload['checkpointed_slot']
+            replica_history = payload['history']
+            replica_running_state = payload['running_state']
+            custom_log('INFO: (Wedge Message) Checkpointed Slot: {}'.format(checkpointed_slot))
+            custom_log('INFO: (Wedge Message) Replica Config: {}'.format(replica_config))
+            custom_log('INFO: (Wedge Message) Running_state: {}'.format(replica_running_state))
+            custom_log('INFO: (Wedge Message) History: {}'.format(replica_history))
+            self.wedge_message_counter[replica_config] += 1
+            self.wedge_messages[replica_config].append(payload)
+            self.total_wedge_messages += 1
+        else:
+            custom_log('INFO: Wedge Message Verification Failed')
 
     def reconfigure(replica_address):
         self.current_configuration += 1
