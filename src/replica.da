@@ -117,6 +117,13 @@ class Replica(process):
                     failure_result_shuttle_count = self.outgoing_result_shuttle_count[0] + 1
                     self.failures[(0, failure_result_shuttle_count, 'outgoing_result_shuttle', 'change_result')] = None
                     custom_log('INFO: Replica adds invalid result in the next outgoing result shuttle')
+                if (client_id, request_count, 'client_request', 'drop_result_stmt') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Client Request: Drop Result Statement, Client: {} Message: {}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    failure_result_shuttle_count = self.outgoing_result_shuttle_count[0] + 1
+                    key = (0, failure_result_shuttle_count, 'outgoing_result_shuttle', 'drop_result_stmt')
+                    self.failures[key] = None
+                    custom_log('INFO: Replica drops Head\'s result statement in the next outgoing result shuttle')
                 if (client_id, request_count, 'client_request', 'invalid_order_sig') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Client Request: Invalid Order Sig, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
@@ -186,6 +193,13 @@ class Replica(process):
                     failure_result_shuttle_count = self.outgoing_result_shuttle_count[0] + 1
                     self.failures[(0, failure_result_shuttle_count, 'outgoing_result_shuttle', 'change_result')] = None
                     custom_log('INFO: Replica adds invalid result in the next outgoing result shuttle')
+                if (client_id, request_count, 'forwarded_request', 'drop_result_stmt') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Forwarded Request: Drop Result Statement, Client:{} Message:{}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    failure_result_shuttle_count = self.outgoing_result_shuttle_count[0] + 1
+                    key = (0, failure_result_shuttle_count, 'outgoing_result_shuttle', 'drop_result_stmt')
+                    self.failures[key] = None
+                    custom_log('INFO: Replica drops Head\'s result statement in the next outgoing result shuttle')
                 if (client_id, request_count, 'forwarded_request', 'invalid_order_sig') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Forwarded Request: Invalid Order Sig, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
@@ -314,10 +328,6 @@ class Replica(process):
         custom_log('INFO: Adding Result Statement with Result: {}'.format(result))
         empty_result_proof = self.factory.ResultProof(**new_result_proof_details)
         result_proof = self.factory.new_result_proof(empty_result_proof, signed_result_statement)
-        if (client_id, request_count, 'client_request', 'drop_result_stmt') in self.failures:
-            log_msg = 'Injecting Failure: Drop Result Stmt, Client: {} Message: {}'
-            custom_log(log_msg.format(self.replica_id, client_id, request_count))
-            result_proof = testutil.drop_result_stmt(result_proof)
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof, 'signed_operation': signed_operation}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
         self.result_shuttle_cache[(client_id, request_id)] = None
@@ -365,7 +375,12 @@ class Replica(process):
                 custom_log('INFO: Old Result: {}'.format(result))
                 result = testutil.change_result()
                 custom_log('INFO: New Result: {}'.format(result))
-
+            if (0, outgoing_shuttle_count, 'outgoing_result_shuttle', 'drop_result_stmt') in self.failures:
+                log_msg = 'INFO: Injecting Failure: Outgoing Result Shuttle: Drop Result Statement, Shuttle Count: {}'
+                custom_log(log_msg.format(outgoing_shuttle_count))
+                custom_log('INFO: Old Result Statements Length: {}'.format(len(result_proof['result_statements'])))
+                result_proof = testutil.drop_result_stmt(result_proof)
+                custom_log('INFO: New Result Statements Length: {}'.format(len(result_proof['result_statements'])))
             result_shuttle_payload = {'result': result, 'result_proof': result_proof}
             signed_result_shuttle_payload = serialize_and_sign(result_shuttle_payload)
             custom_log('INFO: Signed Result Shuttle : {}'.format(signed_result_shuttle_payload))
@@ -421,6 +436,13 @@ class Replica(process):
             failure_result_shuttle_count = self.outgoing_result_shuttle_count[0] + 1
             self.failures[(0, failure_result_shuttle_count, 'outgoing_result_shuttle', 'change_result')] = None
             custom_log('INFO: Replica adds invalid result in the next outgoing result shuttle')
+        if (client_id, request_count, 'shuttle', 'drop_result_stmt') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Request Shuttle: Drop Result Statement, Client:{} Message:{}'
+            custom_log(log_msg.format(client_id, request_count))
+            failure_result_shuttle_count = self.outgoing_result_shuttle_count[0] + 1
+            key = (0, failure_result_shuttle_count, 'outgoing_result_shuttle', 'drop_result_stmt')
+            self.failures[key] = None
+            custom_log('INFO: Replica drops Head\'s result statement in the next outgoing result shuttle')
         if (client_id, request_count, 'shuttle', 'invalid_order_sig') in self.failures:
             log_msg = 'INFO: Injecting Failure: Request Shuttle: Invalid Order Sig, Client: {} Message: {}'
             custom_log(log_msg.format(client_id, request_count))
@@ -492,12 +514,6 @@ class Replica(process):
             custom_log(log_msg.format(outgoing_shuttle_count))
             signed_result_statement = fake_serialize_and_sign(result_statement)
         result_proof = self.factory.new_result_proof(prev_result_proof, signed_result_statement)
-
-        if (client_id, request_count, 'shuttle', 'drop_result_stmt') in self.failures:
-            log_msg = 'INFO: Injecting Failure: Drop Result Stmt, Client: {} Message: {}'
-            custom_log(log_msg.format(self.replica_id, client_id, request_count))
-            result_proof = testutil.drop_result_stmt(result_proof)
-
         request_shuttle_payload = {'order_proof': order_proof, 'result_proof': result_proof, 'signed_operation': signed_operation}
         request_shuttle = self.factory.new_request_shuttle(serialize_and_sign(request_shuttle_payload))
         self.result_shuttle_cache[(client_id, request_id)] = None
@@ -517,7 +533,12 @@ class Replica(process):
                 custom_log('INFO: Old Result: {}'.format(result))
                 result = testutil.change_result()
                 custom_log('INFO: New Result: {}'.format(result))
-
+            if (0, outgoing_shuttle_count, 'outgoing_result_shuttle', 'drop_result_stmt') in self.failures:
+                log_msg = 'INFO: Injecting Failure: Outgoing Result Shuttle: Drop Result Statement, Shuttle Count: {}'
+                custom_log(log_msg.format(outgoing_shuttle_count))
+                custom_log('INFO: Old Result Statements Length: {}'.format(len(result_proof['result_statements'])))
+                result_proof = testutil.drop_result_stmt(result_proof)
+                custom_log('INFO: New Result Statements Length: {}'.format(len(result_proof['result_statements'])))
             result_shuttle_payload = serialize_and_sign({'result': result, 'result_proof': result_proof})
             result_shuttle = self.factory.new_result_shuttle(result_shuttle_payload)
             # FOR DEMO: order changed
@@ -582,16 +603,18 @@ class Replica(process):
             failure_result_shuttle_count = self.outgoing_result_shuttle_count[0] + 1
             self.failures[(0, failure_result_shuttle_count, 'outgoing_result_shuttle', 'change_result')] = None
             custom_log('INFO: Replica adds invalid result in the next outgoing result shuttle')
+        if (client_id, request_count, 'result_shuttle', 'drop_result_stmt') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Result Shuttle: Drop Result Statement, Client:{} Message:{}'
+            custom_log(log_msg.format(client_id, request_count))
+            failure_result_shuttle_count = self.outgoing_result_shuttle_count[0] + 1
+            key = (0, failure_result_shuttle_count, 'outgoing_result_shuttle', 'drop_result_stmt')
+            self.failures[key] = None
+            custom_log('INFO: Replica drops Head\'s result statement in the next outgoing result shuttle')
         if (client_id, request_count, 'result_shuttle', 'sleep') in self.failures:
             sleep_time = self.failures[(client_id, request_count, 'result_shuttle', 'sleep')]
             log_msg = 'Injecting Failure: Result Request: Sleep for {} milliseconds, Client: {} Message: {}'
             custom_log(log_msg.format(sleep_time, client_id, request_count))
             testutil.sleep(sleep_time)
-        if (client_id, request_count, 'result_shuttle', 'drop_result_stmt') in self.failures:
-            log_msg = 'INFO: Dropping Result Stmt, Client: {} Message: {}'
-            custom_log(log_msg.format(self.replica_id, client_id, request_count))
-            result_proof = testutil.drop_result_stmt(result_proof)
-
         result_proof = result_proof._asdict()
         is_verified = verify_result_statements(result, result_proof['result_statements'])
         if is_verified:
@@ -608,6 +631,12 @@ class Replica(process):
                     custom_log('INFO: Old Result: {}'.format(result))
                     result = testutil.change_result()
                     custom_log('INFO: New Result: {}'.format(result))
+                if (0, outgoing_shuttle_count, 'outgoing_result_shuttle', 'drop_result_stmt') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Outgoing Result Shuttle: Drop Result Statement, Shuttle Count: {}'
+                    custom_log(log_msg.format(outgoing_shuttle_count))
+                    custom_log('INFO: Old Result Statements Length: {}'.format(len(result_proof['result_statements'])))
+                    result_proof = testutil.drop_result_stmt(result_proof)
+                    custom_log('INFO: New Result Statements Length: {}'.format(len(result_proof['result_statements'])))
 
             result_shuttle_payload = {'result': result, 'result_proof': result_proof}
             result_shuttle = self.factory.new_result_shuttle(serialize_and_sign(result_shuttle_payload))
@@ -936,7 +965,6 @@ class Replica(process):
             new_history = [dict for dict in self.history if dict['slot'] > list_of_slots[0]]
             self.history = new_history
         custom_log('INFO: History After Truncating: {}'.format(self.history))
-
 
     def verify_checkpoint_proof(checkpoint_proof):
         custom_log('INFO: Checkpoint Proof Verification')
