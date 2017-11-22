@@ -31,6 +31,7 @@ class Olympus(process):
         self.quorum_list_index = -1
         self.quorum_list = []
         self.quorum = []
+        self.running_states = {}
 
     def run():
         custom_log('INFO: Starting to run Olympus')
@@ -50,6 +51,7 @@ class Olympus(process):
         # TODO: use exception pattern
         replica_node_ip, error = self.docker_wrapper.ip_address(replica_node_id)
         replica_address = 'ReplicaNode@{}:{}'.format(replica_node_ip, REPLICA_PORT)
+        custom_log('INFO: FIRST replica node Address: {}'.format(replica_address))
         custom_log('INFO: Waiting for ReplicaNode Setup')
         time.sleep(10)
         custom_log('INFO: Replica Node Started at {}'.format(replica_address))
@@ -63,17 +65,16 @@ class Olympus(process):
 
         client_processes_set = set(self.client_processes.values())
         replica_processes_set = set(self.replica_processes.values())
-
         start(replica_processes_set)
         time.sleep(4)
         start(client_processes_set)
-
         payload = {
             'olympus': self,
             'replicas': replica_processes,
             'configuration': self.current_configuration,
             'majority_count': (self.replica_count // 2) + 1
         }
+
         send(('configuration_response', payload), to=replica_processes_set)
         send(('configuration_response', payload), to=client_processes_set)
         self.wedge_message_counter[self.current_configuration] = 0
@@ -86,8 +87,8 @@ class Olympus(process):
                 pass
             elif timeout(10):
                 if self.is_reconfiguring:
-                    custom_log('INFO: Wedge Statements Not Received - Olympus timed out')
-                    custom_log('INFO: Sending wedge requests again')
+                    custom_log('INFO: (Wedge Message) Wedge Statements Not Received - Olympus timed out')
+                    custom_log('INFO: (Wedge Message) Sending wedge requests again')
                     wedge_request = {'key': 'I am the wedge request'}
                     send(('wedge_request', wedge_request), to=replica_processes_set)
                 continue
@@ -96,10 +97,12 @@ class Olympus(process):
                 continue
             custom_log('INFO: (Quorum) Selected Quorum: {}'.format(self.quorum))
             if is_quorum_consistent():
+                custom_log('INFO: (Quorum) Quorum consists of Replica: {}'.format(display_quorum_replica()))
                 custom_log('INFO: (Quorum) Histories are consistent')
-                custom_log('INFO: (Quorum) Proceeding with Quorum')
+                custom_log('INFO: (Quorum) Proceeding with Quorum {}'.format(display_quorum_replica()))
             else:
                 custom_log('INFO: (Quorum) Histories are not consistent')
+                custom_log('INFO: (Quorum) Rejecting Quorum of Replica: {}'.format(display_quorum_replica()))
                 custom_log('INFO: (Quorum) Olympus will pick a new Quorum')
                 continue
             longest_history, replica_number  = find_longest_history()
@@ -118,16 +121,22 @@ class Olympus(process):
                 custom_log('INFO: (Caught Up Messages) Not enough caught up messages received.')
                 send_wedge_requests_again()
                 continue
-            custom_log('INFO: (Running State) Running State to apply for new configuration: {}'.format(state))
             self.consistent_running_state = state
-            reconfigure(replica_node_id)
+            state, is_consistent = get_running_state()
+            if not is_consistent:
+                custom_log('INFO: (Get Running State) Running states were not consistent')
+                send_wedge_requests_again()
+                continue
+            custom_log('INFO: (Running State) Running State to apply for new configuration: {}'.format(state))
+            send_result_to_clients()
+            reconfigure(replica_address)
             self.is_reconfiguring = False
         await(False)
 
     def receive(msg=('reconfiguration_request', payload)):
         custom_log('(Reconfiguration) Reconfiguration Request Raised :{}'.format(payload))
         replica_processes_set = set(self.replica_processes.values())
-        wedge_request = {'key': 'I am the wedge request'}
+        wedge_request = {'message': 'A  wedge request'}
         if not is_reconfiguring and payload['replica_config'] == self.current_configuration:
             self.is_reconfiguring = True
             custom_log('INFO: (Wedge Request) Sending wedge requests to all replicas')
@@ -135,7 +144,6 @@ class Olympus(process):
         else:
             custom_log('INFO: (Reconfiguration) Duplicate reconfiguration request received for the same configuration')
             custom_log('INFO: (Reconfiguration) Wedge requests are already sent for this configuration')
-            custom_log('INFO: (Reconfiguration) Waiting for wedge messages from replicas')
 
     def receive(msg=('wedge_message', payload)):
         replica_id = payload['replica_id']
@@ -153,44 +161,29 @@ class Olympus(process):
         self.total_wedge_messages += 1
 
 
-    def reconfigure(replica_node_id):
+    def reconfigure(replica_address):
         self.current_configuration += 1
         self.wedge_message_counter[self.current_configuration] = 0
         self.caught_up_message_counter[self.current_configuration] = 0
         self.wedge_messages[self.current_configuration] = []
         self.caught_up_messages[self.current_configuration]  = []
-        custom_log('INFO: (Reconfigure) System is reconfiguring ...')
-
-        custom_log('INFO: (Reconfigure) (Re)Starting Replica Node')
-        container_name = 'replicanode{}'.format(self.current_configuration)
-        old_replica_node_id = replica_node_id
-        replica_node_id, error = self.docker_wrapper.start('replicanode_img', container_name)
-        if error:
-            custom_log('ERR: {}'.format(error))
-
-        replica_node_ip, error = self.docker_wrapper.ip_address(replica_node_id)
-        replica_address = 'ReplicaNode@{}:{}'.format(replica_node_ip, REPLICA_PORT)
+        custom_log('INFO: INITIATING RECONFIGURATION ')
+        for rid in self.replica_processes:
+            custom_log('Sending Kill to Replica : {}'.format(rid))
+            send(('kill',), to=self.replica_processes[rid])
         time.sleep(10)
-        custom_log('INFO: (Reconfigure) (Re)Starting Replica Node Started at {}'.format(replica_address))
-        if error:
-            custom_log('ERR: (Reconfigure) Restart Error retrieving Replica Node IP address')
-
+        custom_log('INFO: (Reconfigure) Creating new replica processes at {}'.format(replica_address))
         self.config['initial_running_state'] = self.consistent_running_state
         self.replica_processes = {}
         for replica_id in range(1, self.replica_count + 1):
-            replica_process = new(replica.Replica, args=(self.client_processes, replica_id, self.signature, self.config),
-                                  at = replica_address).pop()
-            #custom_log('R: {}, type: {}'.format(replica_process, type(replica_process)))
-            start(replica_process)
-            self.replica_processes[replica_id] = replica_process
-
-
+            replica_process = new(replica.Replica,
+                                  args=(self.client_processes, replica_id, self.signature, self.config),
+                                  at=replica_address)
+            self.replica_processes[replica_id] = replica_process.pop()
         client_processes_set = set(self.client_processes.values())
         replica_processes_set = set(self.replica_processes.values())
-        #start(replica_processes_set)
-        error = self.docker_wrapper.remove(old_replica_node_id)
-        if error:
-            custom_log('ERR: (Reconfigure) Error Removing Old Container: {}'.format(error))
+        custom_log('INFO: (Reconfigure) Starting new replica processes')
+        start(replica_processes_set)
         time.sleep(4)
         payload = {
             'status' : "reconfigure",
@@ -199,11 +192,10 @@ class Olympus(process):
             'configuration': self.current_configuration,
             'majority_count': (self.replica_count // 2) + 1
         }
-        custom_log('INFO: (Reconfigure) Initializing New Replicas:')
         custom_log('INFO: (Reconfigure) New configuration: {}'.format(self.current_configuration))
-        # send(('configuration_response', payload), to=replica_processes_set)
-        # send(('configuration_response', payload), to=client_processes_set)
-        await(False)
+        custom_log('INFO: (Reconfigure) Initializing New Replicas:')
+        send(('configuration_response', payload), to=replica_processes_set)
+        send(('configuration_response', payload), to=client_processes_set)
 
 
     def find_longest_history():
@@ -235,7 +227,8 @@ class Olympus(process):
                 'olympus': self,
                 'replicas': self.replica_processes,
                 'configuration': self.current_configuration,
-                'majority_count': (self.replica_count // 2) + 1
+                'majority_count': (self.replica_count // 2) + 1,
+                'is_reconfiguring': self.is_reconfiguring
             }
             response = self.factory.new_configuration_response(payload)
             send(response, to=self.client_processes[client_id])
@@ -259,6 +252,7 @@ class Olympus(process):
             if wedge_message['replica_id'] != replica_id:
                 diff_operations = calculate_operations_diff(longest_history, wedge_message)
                 #ToDo: Sign the message
+                custom_log('INFO: Replica {} should catchup on {}'.format(wedge_message['replica_id'], diff_operations))
                 send(('catch_up', diff_operations), to = self.replica_processes[wedge_message['replica_id']])
 
     def calculate_operations_diff(longest_history, wedge_message):
@@ -266,9 +260,9 @@ class Olympus(process):
         w_history = wedge_message['history']
         if w_history:
             w_slot = w_history[-1]['slot']
-            for history in longest_history:
-                if history['slot'] > w_slot:
-                    diff.append(history['operation'])
+            for orderproof in longest_history:
+                if orderproof['slot'] > w_slot:
+                    diff.append(orderproof)
         return diff
 
     def check_running_state_consistency():
@@ -323,6 +317,13 @@ class Olympus(process):
             if is_slots_skipped(q['history']):
                 custom_log('INFO: (Quorum) Olympus detected slot holes in replica {}'.format(q['replica_id']))
                 return False
+        if not running_states_consistent():
+            custom_log('INFO: (Quorum) Quorum had inconsistent running states for checkpoints')
+            return False
+        for q in self.quorum:
+            if not verified_client_operations(q['history']):
+                custom_log('INFO: (Quorum) Quorum had unverified client opertaions')
+                return False
         q_list = []
         for q in self.quorum:
             q_list.append(q['history'])
@@ -357,6 +358,111 @@ class Olympus(process):
             custom_log('INFO: (Quorum) Slot hole was found')
             return True
         return False
+
+    def get_running_state():
+        for wedge_message in self.quorum:
+            replica_id = wedge_message['replica_id']
+            message = {'message': 'Get Running State'}
+            # ToDo: Sign this message
+            custom_log(
+            'INFO: (Get Running State) Requesting hashed running state of replica {} (which is present in the quorum)'.format(
+                    replica_id))
+            recepient = self.replica_processes[wedge_message['replica_id']]
+            send(('get_running_state', message), to=recepient)
+            if await(bool(self.running_states)):
+                pass
+            elif timeout(3):
+                continue
+            payload = self.running_states[self.current_configuration]
+            if (payload['replica_id'] == replica_id and payload['replica_config'] == self.current_configuration and
+                        payload['running_state'] == self.consistent_running_state):
+                custom_log('INFO: (Get Running State) Running States Match')
+                custom_log('INFO: (Get Running State) Done')
+                del self.running_states[self.current_configuration]
+                return self.consistent_running_state, True
+            custom_log('INFO: (Get Running State) Running States Do Not Match')
+            custom_log('INFO: (Get Running State) Or Running state received for different config')
+            custom_log('INFO: (Get Running State) Olympus will send request to the next replica in the Quorum')
+            del self.running_states[self.current_configuration]
+        return {}, False
+
+    def receive(msg=('running_state', payload)):
+        custom_log('INFO: (Get Running State) Received Running State from Replica {}'.format(payload['replica_id']))
+        self.running_states[self.current_configuration] = payload
+
+    def send_result_to_clients():
+        cached_result_list = []
+        cached_dict = {}
+        cached_list = []
+        tempdict = {}
+        for message in self.caught_up_messages[self.current_configuration]:
+            cached_result_list.append(message['cached_result'])
+        custom_log('INFO: (Stored Results) Results from old config stored in Olympus: {}'.format(cached_result_list))
+        for cached_result in cached_result_list:
+            for client_id in cached_result:
+                if client_id in tempdict:
+                    cached_list = tempdict[client_id]
+                cached_list.append(cached_result[client_id])
+                cached_dict[client_id] = cached_list
+                tempdict[client_id] = cached_list
+                cached_list = []
+        #custom_log('INFO: Formatted dict: {}'.format(cached_dict))
+        for client_id, resultstatements in cached_dict.items():
+            if is_result_consistent(resultstatements):
+                custom_log('INFO: (Stored Results) Found a Result Statement for client {}'.format(client_id))
+                payload = {'request_id': resultstatements[0]['request_id'], 'result': resultstatements[0]['result']}
+                #ToDo: Sign this
+                send(('result_from_olympus', payload), to = self.client_processes[client_id])
+
+    def is_result_consistent(resultstatements):
+        if not resultstatements:
+            return False
+        req_id = resultstatements[0]['request_id']
+        op = resultstatements[0]['operation']
+        for result in resultstatements:
+            if result['request_id'] != req_id or result['operation'] != op:
+                return False
+        return True
+
+    def running_states_consistent():
+        checkpoints = {}
+        for message in self.quorum:
+            checkpoints[message['checkpointed_slot']] = []
+        #custom_log('HERE (1): {}'.format(checkpoints))
+        for message in self.quorum:
+            checkpoints[message['checkpointed_slot']].append(message['running_state'])
+        #custom_log('HERE (2): {}'.format(checkpoints))
+        for key, values in checkpoints.items():
+            if not running_states_equal(values):
+                #custom_log('HERE (4)')
+                return False
+        #custom_log('HERE (5)')
+        return True
+
+    def running_states_equal(values):
+        if not values:
+            return False
+        rs_1 = values[0]
+        for rs in values:
+            if rs != rs_1:
+                return False
+        return True
+    def display_quorum_replica():
+        message = ''
+        for q in self.quorum:
+            message += str(q['replica_id']) + ', '
+        message = message.strip(', ')
+        return '(' + message + ')'
+    def verified_client_operations(history):
+        if not history:
+            return False
+        for orderproof in history:
+            is_verified, unsigned_operation = self.signature.verify_client(orderproof['client_id'], orderproof['signed_operation'])
+            if not is_verified:
+                return False
+            if unsigned_operation != orderproof['operation']:
+                return False
+        return True
 
     def yieldpoint(n):
         if await(False):

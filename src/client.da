@@ -35,10 +35,17 @@ class Client(process):
         await(False)
 
     def receive(msg=('configuration_response', payload)):
+        is_reconfiguring = False
+        if 'is_reconfiguring' in payload:
+            is_reconfiguring = payload['is_reconfiguring']
         received_configuration = payload['configuration']
-        if self.current_configuration is None or self.current_configuration < received_configuration:
+        if is_reconfiguring:
+            custom_log('INFO: Received latest configuration from Olympus')
+            custom_log('INFO: Olympus is in the middle of a Reconfiguration')
+            custom_log('INFO: Configuration received is old configuration...client must retry later')
+        elif self.current_configuration is None or self.current_configuration < received_configuration:
             custom_log('INFO: Current Configuration Outdated')
-            custom_log('INFO: Received New Configuration from Olympus')
+            custom_log('INFO: Received latest Configuration from Olympus')
             self.olympus = payload['olympus']
             self.replica_processes = payload['replicas']
             self.replica_processes_set = set(self.replica_processes.values())
@@ -79,10 +86,20 @@ class Client(process):
         else:
             custom_log('INFO: Response Rejected, Result Proof Verification Failed')
             custom_log('INFO: Raise Reconfigure Request')
-            await(False)
+            #await(False)
 
     def handle_error_response(payload):
         custom_log('INFO: Request New Configuration from Olympus')
+
+    def receive(msg=('result_from_olympus', payload)):
+        request_id = payload['request_id']
+        result = payload['result']
+        if request_id in self.pending_requests:
+            custom_log('INFO: (Olympus Response) Response Accepted, Request ID: {}'.format(request_id))
+            custom_log('INFO: (Olympus Response) Result: {}'.format(result))
+            self.pending_requests.remove(request_id)
+        else:
+            custom_log('INFO: (Olympus Response) Dropping Duplicate Response')
 
     def send_request(operation, receiver):
         custom_log('INFO: Checking for any pending requests')
