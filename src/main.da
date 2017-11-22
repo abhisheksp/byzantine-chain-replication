@@ -5,7 +5,6 @@ import sys
 import state
 import testutil
 import util
-from signature import Signature
 
 olympus = import_da('olympus')
 
@@ -25,32 +24,17 @@ def main():
 
     configuration['replica_count'] = 2 * configuration['t'] + 1
     configuration['initial_running_state'] = state.State()
-    client_count = configuration['num_client']
-    replica_count = configuration['replica_count']
 
     # Generate Workloads for clients
     configuration['client_workload'] = testutil.parse_client_workloads(configuration)
     configuration['failure_scenarios'] = testutil.parse_failure_scenarios(configuration)
     output('Failure Scenarios: ', configuration['failure_scenarios'])
 
-    # Setup Keys
-    # TODO: move to olympus
-    signature = Signature()
-    output('INFO: Generating keys for clients ...')
-    client_sks = signature.generate_client_keys(client_count)
-    configuration['client_sks'] = client_sks
-    output('INFO: Generating keys for replica ...')
-    replica_sks = signature.generate_replica_keys(replica_count)
-    configuration['replica_sks'] = replica_sks
-    output('INFO: Generating Olympus signing key ...')
-    olympus_sk = signature.generate_olympus_keys()
-    configuration['olympus_singing_key'] = olympus_sk
-
     output('INFO: Channel = Reliable and FIFO')
     config(channel={reliable, fifo})
 
     # Setup Olympus
     output('INFO: Setting Up Olympus ...')
-    olympus_process = new(olympus.Olympus, args=(signature, configuration), at='OlympusNode')
+    olympus_process = new(olympus.Olympus, args=(configuration,), at='OlympusNode')
 
     start(olympus_process)

@@ -3,6 +3,8 @@ import time
 from dockerwrapper import DockerWrapper
 from message import Message
 from constants import REPLICA_PORT
+from signature import Signature
+
 import itertools
 import os
 
@@ -11,8 +13,9 @@ client = import_da('client')
 
 
 class Olympus(process):
-    def setup(signature, config):
-        self.signing_key = config['olympus_singing_key']
+    def setup(config):
+        self.signing_key = None
+        self.signature = None
         self.replica_count = config['replica_count']
         self.docker_wrapper = DockerWrapper()
         self.replica_processes = {}
@@ -33,8 +36,19 @@ class Olympus(process):
         self.quorum = []
         self.running_states = {}
 
+    def setup_signatures():
+        self.signature = Signature()
+        output('INFO: Generating keys for clients ...')
+        client_count = config['num_client']
+        self.config['client_sks'] = self.signature.generate_client_keys(client_count)
+        output('INFO: Generating keys for replica ...')
+        self.config['replica_sks'] = self.signature.generate_replica_keys(self.replica_count)
+        output('INFO: Generating Olympus signing key ...')
+        self.signing_key = self.signature.generate_olympus_keys()
+
     def run():
         custom_log('INFO: Starting to run Olympus')
+        setup_signatures()
         client_count = config['num_client']
         # TODO: implement multihost replicas for perform 900
         for client_id in range(1, client_count + 1):
@@ -424,6 +438,7 @@ class Olympus(process):
                 return False
         return True
 
+    # TODO: remove comments
     def running_states_consistent():
         checkpoints = {}
         for message in self.quorum:
@@ -443,24 +458,24 @@ class Olympus(process):
         if not values:
             return False
         rs_1 = values[0]
+        # TODO: use all
         for rs in values:
             if rs != rs_1:
                 return False
         return True
+
     def display_quorum_replica():
-        message = ''
-        for q in self.quorum:
-            message += str(q['replica_id']) + ', '
-        message = message.strip(', ')
-        return '(' + message + ')'
+        replicas_str = ', '.join(map(lambda x: x['replica_id'], self.quorum))
+        return '({})'.format(replicas_str)
+
     def verified_client_operations(history):
         if not history:
             return False
         for orderproof in history:
-            is_verified, unsigned_operation = self.signature.verify_client(orderproof['client_id'], orderproof['signed_operation'])
-            if not is_verified:
-                return False
-            if unsigned_operation != orderproof['operation']:
+            client_id = orderproof['client_id']
+            signed_operation = orderproof['signed_operation']
+            is_verified, unsigned_operation = self.signature.verify_client(client_id, signed_operation)
+            if not is_verified or unsigned_operation != orderproof['operation']:
                 return False
         return True
 
