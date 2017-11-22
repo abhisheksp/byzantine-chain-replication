@@ -25,6 +25,7 @@ class Client(process):
         self.majority_replica_count = None
         self.current_configuration = None
         self.request_count = 0
+        self.is_reconfiguring = False
 
     def run():
         custom_log('INFO: Client is up and running')
@@ -35,11 +36,10 @@ class Client(process):
         await(False)
 
     def receive(msg=('configuration_response', payload)):
-        is_reconfiguring = False
-        if 'is_reconfiguring' in payload:
-            is_reconfiguring = payload['is_reconfiguring']
+        custom_log('INFO: Received configuration Response, Payload: {}'.format(payload))
+        self.is_reconfiguring = payload['is_reconfiguring']
         received_configuration = payload['configuration']
-        if is_reconfiguring:
+        if self.is_reconfiguring:
             custom_log('INFO: Received latest configuration from Olympus')
             custom_log('INFO: Olympus is in the middle of a Reconfiguration')
             custom_log('INFO: Configuration received is old configuration...client must retry later')
@@ -102,8 +102,8 @@ class Client(process):
             custom_log('INFO: (Olympus Response) Dropping Duplicate Response')
 
     def send_request(operation, receiver):
-        custom_log('INFO: Checking for any pending requests')
-        if await(len(self.pending_requests) == 0):
+        custom_log('INFO: Checking for any pending requests and if a reconfiguration is in progress ...')
+        if await(len(self.pending_requests) == 0 and not self.is_reconfiguring):
             serialized_payload = serialize_and_sign(operation)
             request = self.factory.new_request(serialized_payload)
             request_id = request[1]['request_id']
@@ -113,30 +113,36 @@ class Client(process):
             send(request, to=receiver)
             log_msg = 'INFO: Sending Request, RequestID: {}, Receiver: {}, Operation: {}'
             custom_log(log_msg.format(request_id, receiver, operation))
-            if await(request_id not in self.pending_requests):
-                pass
-            elif timeout(self.request_timeout):
-                custom_log('INFO: Request Timed Out')
-                retransmit_request(request_id, operation)
+            while True:
+                if await(request_id not in self.pending_requests):
+                    break
+                elif timeout(self.request_timeout):
+                    custom_log('INFO: Request Timed Out')
+                    retransmit_request(request_id, operation)
+            custom_log('INFO: Request Completed, Request: {}'.format(request_id))
 
-    def send_configuration_request():
-        if self.request_count % 10 == 0:
+    def send_configuration_request(with_check=True):
+        custom_log('send config req: {}'.format(with_check))
+        if not with_check or self.request_count % 10 == 0:
             custom_log('INFO: Sending New Configuration Request')
             empty_payload = serialize_and_sign({})
             request = self.factory.new_configuration_request(empty_payload)
             send(request, to=self.olympus)
 
     def retransmit_request(old_request_id, operation):
-        custom_log('INFO: Retransmitting Old Request, RequestID: {} '.format(old_request_id))
         self.request_count += 1
         payload = serialize_and_sign(operation)
         request = self.factory.new_retransmission_request(old_request_id, payload)
-        send_configuration_request()
-        send(request, to=self.replica_processes_set)
-        if await(old_request_id not in self.pending_requests):
-            pass
-        elif timeout(self.request_timeout):
-            custom_log('INFO: Retransmission Timed Out, Request ID: {}'.format(old_request_id))
+        send_configuration_request(False)
+        custom_log('INFO: Checking if Reconfiguration in progress before retransmission')
+        if not self.is_reconfiguring:
+            custom_log('INFO: Retransmitting Old Request, RequestID: {} '.format(old_request_id))
+            send(request, to=self.replica_processes_set)
+            if await(old_request_id not in self.pending_requests):
+                pass
+            elif timeout(self.request_timeout):
+                custom_log('INFO: Retransmission Timed Out, Request ID: {}'.format(old_request_id))
+            return
 
     def serialize_and_sign(payload):
         serialized_payload = pickle.dumps(payload)
@@ -205,17 +211,13 @@ class Client(process):
 
         custom_log('INFO: Starting DEMO')
         test_case = self.config.get('test_case', 0)
-        if test_case == 1:
-            custom_log('INFO: Executing Test Case: 1')
-            regular_client_workflow()
-        elif test_case == 2:
-            custom_log('INFO: Executing Test Case: 2')
-            regular_client_workflow()
-        elif test_case == 3:
-            custom_log('INFO: Executing Test Case: 3')
+        custom_log('INFO: Executing Test Case: {}'.format(test_case))
+        if test_case == 3:
             demo_forward_requests()
         else:
             regular_client_workflow()
+
+        # TODO: automatically run consistency check
 
     def custom_log(log_message):
         output('Client: {} {}'.format(self.client_id, log_message))

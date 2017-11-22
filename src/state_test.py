@@ -6,7 +6,7 @@ import os
 
 class StateTest(unittest.TestCase):
     def test_state_equality(self):
-        replica_count = 11
+        replica_count = 3
         replica_states = []
         parent_dir = os.path.abspath(os.pardir)
         logs_dir = 'logs'
