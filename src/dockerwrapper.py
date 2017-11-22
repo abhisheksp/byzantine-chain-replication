@@ -15,11 +15,19 @@ class DockerWrapper:
         self.client = docker.from_env()
         self.containers = {}
 
-    def start(self, image, name):
+    def start(self, image, name, node_name):
         try:
             logs_dir = os.path.join(Path(__file__).parents[1], 'logs')
             volume_mnt = {logs_dir: {'bind': '/app/logs/', 'mode': 'rw'}}
-            container = self.client.containers.run(image, detach=True, name=name, auto_remove=True, volumes=volume_mnt)
+            env_vars = {'NODE_NAME': node_name}
+            container = self.client.containers.run(
+                image,
+                detach=True,
+                name=name,
+                auto_remove=True,
+                volumes=volume_mnt,
+                environment=env_vars,
+            )
             self.containers[container.id] = container
             return container.id, False
         except docker.errors.ContainerError as ce:

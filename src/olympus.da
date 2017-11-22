@@ -53,10 +53,12 @@ class Olympus(process):
             client_process = new(client.Client, args=(client_id, self.signature, self.config), at='ClientNode')
             self.client_processes[client_id] = client_process.pop()
 
-        # Start Replica Node
+        # Start Replica Nodes
         custom_log('INFO: Starting Replica Node')
         container_name = 'replicanode{}'.format(self.current_configuration)
-        replica_node_id, error = self.docker_wrapper.start('replicanode_img', container_name)
+
+        # setup_replica_nodes()
+        replica_node_id, error = self.docker_wrapper.start('replicanode_img', container_name, 'ReplicaNode')
         if error:
             custom_log('ERR: {}'.format(error))
 
