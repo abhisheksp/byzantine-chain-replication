@@ -29,9 +29,8 @@ class Replica(process):
         self.slot = Slot()
         self.result_shuttle_cache = {}
         self.olympus = None
-        # TODO Verify milliseconds/seconds precision
-        self.head_timeout = config['head_timeout']
-        self.non_head_timeout = config['nonhead_timeout']
+        self.head_timeout = (config['head_timeout']/1000)
+        self.non_head_timeout = (config['nonhead_timeout']/1000)
         self.current_configuration = 1
         self.checkpointed_slot = 0
         self.cached_result = {}
@@ -709,14 +708,14 @@ class Replica(process):
         if (request_count, 'checkpoint', 'crash') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: crash())'
             custom_log(log_msg.format(request_count))
+            custom_log('INFO: Replica about to crash')
             testutil.crash()
-            # TODO: change this log?
-            custom_log('INFO: Replica Crashed!!')
         if (request_count, 'checkpoint', 'sleep') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: sleep())'
             custom_log(log_msg.format(request_count))
-            testutil.sleep()
-            custom_log('INFO: Replica Awake again after Sleep')
+            n = self.failures[request_count, 'checkpoint', 'sleep']
+            testutil.sleep(n)
+            custom_log('INFO: Replica awake again after sleep')
         if (request_count, 'checkpoint', 'drop') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: drop())'
             custom_log(log_msg.format(request_count))
@@ -729,45 +728,58 @@ class Replica(process):
             testutil.extra_op(self.running_state)
             custom_log('INFO: Applied Extra Operation: put("a","a") to replica running state')
             custom_log('INFO: Modified Running State: {}'.format(self.running_state))
-        # TODO: Fix self.failures.append => dict syntax
         if (request_count, 'checkpoint', 'invalid_order_sig') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: invalid_order_sig())'
             custom_log(log_msg.format(request_count))
-            failure_request_count = request_shuttle_count[0] + 1
-            self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
-            custom_log(
-                'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+            failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
+            custom_log('INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
         if (request_count, 'checkpoint', 'truncate_history') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: truncate_history())'
             custom_log(log_msg.format(request_count))
             failure_request_count = self.wedge_message_count + 1
-            self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
-            custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
+            n = self.failures[(request_count, 'checkpoint', 'truncate_history')]
+            self.failures[(0, failure_request_count, 'wedge', 'truncate_history')] = n
+            custom_log('INFO: In the next outgoing wedged message, omit (truncate) last {} entry(s) in history'.format(n))
         if (request_count, 'checkpoint', 'change_operation') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: change_operation())'
             custom_log(log_msg.format(request_count))
-            failure_request_count = request_shuttle_count[0] + 1
-            self.failures.append((0, failure_request_count, 'shuttle', 'change_operation'))
+            failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'outgoing_shuttle', 'change_operation')] = None
             custom_log('INFO: Replica uses get("x") as the operation in the next outgoing shuttle')
         if (request_count, 'checkpoint', 'change_result') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: change_result())'
             custom_log(log_msg.format(request_count))
-            failure_request_count = result_shuttle_count[0] + 1
-            self.failures.append((0, failure_request_count, 'shuttle', 'change_result'))
+            failure_request_count = self.result_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'result_shuttle', 'change_result')] = None
             custom_log('INFO: Replica uses the hash of "OK" in the next outgoing result shuttle')
         if (request_count, 'checkpoint', 'drop_result_stmt') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: drop_result_stmt())'
             custom_log(log_msg.format(request_count))
-            failure_request_count = result_shuttle_count[0] + 1
-            self.failures.append((0, failure_request_count, 'shuttle', 'drop_result_stmt'))
-            custom_log(
-                'INFO: Replica omit the heads result statement from the result proof in the next outgoing result shuttle')
+            failure_request_count = self.result_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'result_shuttle', 'drop_result_stmt')] = None
+            custom_log('INFO: Replica omit the heads result statement from the result proof '
+                       'in the next outgoing result shuttle')
+        if (request_count, 'checkpoint', 'invalid_result_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: invalid_result_sig())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = self.result_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'result_shuttle', 'invalid_result_sig')] = None
+            custom_log('INFO: In the next outgoing shuttle message, '
+                       'replica puts an invalid signature on its result statement')
+        if (request_count, 'checkpoint', 'drop_checkpt_stmts') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: drop_checkpt_stmts())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = self.completed_checkpoint_count + 1
+            self.failures[(failure_request_count, 'completed_checkpoint', 'drop_checkpt_stmts')] = None
+            custom_log('INFO: In the next outgoing completed checkpoint proof, '
+                       'omits the first t+1 checkpoint statements')
         if not self.is_head and all_good:
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
             if is_verified:
-                custom_log('INFO: Checkpointproof signature verification successful')
-                log_msg = 'INFO: Received Checkpointproof from Replica {}, Payload: {}'
+                custom_log('INFO: CheckPoint Proof signature verification successful')
+                log_msg = 'INFO: Received CheckPoint Proof from Replica {}, Payload: {}'
                 custom_log(log_msg.format(sender_replica_id, payload))
                 prev_checkpoint_proof = self.factory.parse_checkpoint_request(payload)
                 handle_checkpoint_proof(prev_checkpoint_proof)
@@ -804,12 +816,13 @@ class Replica(process):
         if (request_count, 'completed_checkpoint', 'crash') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: crash())'
             custom_log(log_msg.format(request_count))
-            custom_log('INFO: Replica Crashed!!')
+            custom_log('INFO: Replica about to crash')
             testutil.crash()
         if (request_count, 'completed_checkpoint', 'sleep') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: sleep())'
             custom_log(log_msg.format(request_count))
-            testutil.sleep()
+            n = self.failures[(request_count, 'completed_checkpoint', 'sleep')]
+            testutil.sleep(n)
             custom_log('INFO: Replica Awake again after Sleep')
         if (request_count, 'completed_checkpoint', 'drop') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: drop())'
@@ -834,35 +847,43 @@ class Replica(process):
         if (request_count, 'completed_checkpoint', 'invalid_order_sig') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: invalid_order_sig())'
             custom_log(log_msg.format(request_count))
-            failure_request_count = request_shuttle_count[0] + 1
-            self.failures.append((0, failure_request_count, 'shuttle', 'invalid_order_sig'))
-            custom_log(
-                'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+            failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
+            custom_log('INFO: In the next outgoing shuttle message, '
+                       'replica puts an invalid signature on its order statement')
         if (request_count, 'completed_checkpoint', 'truncate_history') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: truncate_history())'
             custom_log(log_msg.format(request_count))
             failure_request_count = self.wedge_message_count + 1
-            self.failures.append((0, failure_request_count, 'wedge', 'truncate_history'))
-            custom_log('INFO: In the next outgoing wedged message, omit (truncate) last entry in history')
+            n = self.failures[(request_count, 'completed_checkpoint', 'truncate_history')]
+            self.failures[(0, failure_request_count, 'wedge', 'truncate_history')] = n
+            custom_log('INFO: In the next outgoing wedged message, omit (truncate) last {} entry(s) in history'.format(n))
         if (request_count, 'completed_checkpoint', 'change_operation') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: change_operation())'
             custom_log(log_msg.format(request_count))
-            failure_request_count = request_shuttle_count[0] + 1
-            self.failures.append((0, failure_request_count, 'shuttle', 'change_operation'))
+            failure_request_count = self.outgoing_request_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'outgoing_shuttle', 'change_operation')] = None
             custom_log('INFO: Replica uses get("x") as the operation in the next outgoing shuttle')
         if (request_count, 'completed_checkpoint', 'change_result') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: change_result())'
             custom_log(log_msg.format(request_count))
-            failure_request_count = result_shuttle_count[0] + 1
-            self.failures.append((0, failure_request_count, 'shuttle', 'change_result'))
+            failure_request_count = self.result_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'result_shuttle', 'change_result')] = None
             custom_log('INFO: Replica uses the hash of "OK" in the next outgoing result shuttle')
         if (request_count, 'completed_checkpoint', 'drop_result_stmt') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: drop_result_stmt())'
             custom_log(log_msg.format(request_count))
-            failure_request_count = result_shuttle_count[0] + 1
-            self.failures.append((0, failure_request_count, 'shuttle', 'drop_result_stmt'))
-            custom_log(
-                'INFO: Replica omit the heads result statement from the result proof in the next outgoing result shuttle')
+            failure_request_count = self.result_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'result_shuttle', 'drop_result_stmt')] = None
+            custom_log('INFO: Replica omit the heads result statement from the result proof '
+                       'in the next outgoing result shuttle')
+        if (request_count, 'completed_checkpoint', 'invalid_result_sig') in self.failures:
+            log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: invalid_result_sig())'
+            custom_log(log_msg.format(request_count))
+            failure_request_count = self.result_shuttle_count[0] + 1
+            self.failures[(0, failure_request_count, 'result_shuttle', 'invalid_result_sig')] = None
+            custom_log('INFO: In the next outgoing shuttle message, '
+                       'replica puts an invalid signature on its result statement')
         if not self.is_tail and all_good:
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
@@ -871,6 +892,12 @@ class Replica(process):
                 log_msg = 'INFO: Received Completed Checkpointproof from Replica {}, Payload: {}'
                 custom_log(log_msg.format(sender_replica_id, payload))
                 next_checkpoint_proof = payload['checkpoint_proof']
+                if (request_count, 'completed_checkpoint', 'drop_checkpt_stmts') in self.failures:
+                    log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: drop_checkpt_stmts())'
+                    custom_log(log_msg.format(request_count))
+                    r_statements = next_checkpoint_proof['checkpoint_statements']
+                    tampered_r_statements = testutil.drop_checkpoint_statements(r_statements, self.config['replica_count'])
+                    next_checkpoint_proof['checkpoint_statements'] = tampered_r_statements
                 handle_completed_checkpoint_proof(next_checkpoint_proof)
             else:
                 custom_log('INFO: Completed Checkpoint Proof Verification failed')
@@ -985,6 +1012,8 @@ class Replica(process):
 
     def send_response_to_client(client_id, result_shuttle):
         failure_injection()
+        self.result_shuttle_count[client_id] += 1
+        self.result_shuttle_count[0] += 1
         response = self.factory.new_response(result_shuttle)
         client_process = self.client_processes[client_id]
         send(response, to=client_process)

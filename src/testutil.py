@@ -189,8 +189,9 @@ def crash():
     os._exit(-1)
 
 
-def sleep(sleep_time=6):
-    time.sleep(sleep_time)
+def sleep(sleep_time=6000):
+    n = sleep_time/1000
+    time.sleep(n)
 
 
 def drop(request):
@@ -216,3 +217,9 @@ def generate_fake_key():
 
 def truncate_history(history):
     return history[:-1]
+
+def drop_checkpoint_statements(r_statements, r):
+    t = (r - 1) // 2
+    if len(r_statements) > t:
+        r_statements = r_statements[t+1:]
+    return r_statements
