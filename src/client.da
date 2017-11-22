@@ -65,8 +65,14 @@ class Client(process):
             result_proof = payload['result_proof']
             request_id = result_proof['request_id']
             if request_id in self.pending_requests:
-                handle_response(payload)
-                self.pending_requests.remove(request_id)
+                is_verified = handle_response(payload)
+                if is_verified:
+                    custom_log('INFO: Response Accepted, Request ID: {}'.format(request_id))
+                    custom_log('INFO: Removing Request from Pending Requests, Request ID: {}'.format(request_id))
+                    self.pending_requests.remove(request_id)
+                else:
+                    log_msg = 'INFO: Response Rejected, Result Proof Verification Failed, Request ID: {}'
+                    custom_log(log_msg.format(request_id))
             else:
                 log_msg = 'INFO: Dropping Duplicate Response from Replica: {}, Payload: {}'
                 custom_log(log_msg.format(replica_id, payload))
@@ -80,13 +86,7 @@ class Client(process):
 
     def handle_response(payload):
         result, result_proof = payload['result'], payload['result_proof']
-        is_verified = verify_result_proof(result, result_proof)
-        if is_verified:
-            custom_log('INFO: Response Accepted, Request ID: {}'.format(result_proof['request_id']))
-        else:
-            custom_log('INFO: Response Rejected, Result Proof Verification Failed')
-            custom_log('INFO: Raise Reconfigure Request')
-            #await(False)
+        return verify_result_proof(result, result_proof)
 
     def handle_error_response(payload):
         custom_log('INFO: Request New Configuration from Olympus')

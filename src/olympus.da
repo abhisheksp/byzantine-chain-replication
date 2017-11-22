@@ -65,7 +65,7 @@ class Olympus(process):
         replica_address = 'ReplicaNode@{}:{}'.format(replica_node_ip, REPLICA_PORT)
         custom_log('INFO: FIRST replica node Address: {}'.format(replica_address))
         custom_log('INFO: Waiting for ReplicaNode Setup')
-        time.sleep(10)
+        time.sleep(5)
         custom_log('INFO: Replica Node Started at {}'.format(replica_address))
         if error:
             custom_log('ERR: Error retrieving Replica Node IP address')
@@ -454,7 +454,7 @@ class Olympus(process):
         return bool(values) and all(rs == values[0] for rs in values)
 
     def display_quorum_replica():
-        replicas_str = ', '.join(map(lambda x: x['replica_id'], self.quorum))
+        replicas_str = ', '.join(map(lambda x: str(x['replica_id']), self.quorum))
         return '({})'.format(replicas_str)
 
     def verified_client_operations(history):
