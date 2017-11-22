@@ -58,6 +58,7 @@ class Replica(process):
 
     def run():
         custom_log('INFO: Started Replica {}'.format(self.replica_id))
+        custom_log('INFO: Replica Failures: {}'.format(self.failures))
 
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
@@ -149,13 +150,19 @@ class Replica(process):
                     self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_result_sig')] = None
                     custom_log(
                         'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its result statement')
+                if (client_id, request_count, 'client_request', 'drop_checkpt_stmts') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Client Request: Drop Checkpoint Statements,Client:{} Message:{}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    failure_request_count = self.completed_checkpoint_count + 1
+                    self.failures[(failure_request_count, 'completed_checkpoint', 'drop_checkpt_stmts')] = None
+                    custom_log('INFO: In the next outgoing completed checkpoint proof, '
+                               'omits the first t+1 checkpoint statements')
                 handle_new_request(client_id, request_id, operation, signed_payload)
             else:
                 custom_log('INFO: Not Verified Client {} Request'.format(client_id))
 
     def receive(msg=('forward_request', payload)):
         if self.is_head:
-            custom_log('INFO: Replica is Head')
             sender_replica_id, signed_payload = payload['replica_id'], payload['payload']
             is_verified, payload = self.signature.verify_replica(sender_replica_id, signed_payload)
             if is_verified:
@@ -232,6 +239,13 @@ class Replica(process):
                     self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_result_sig')] = None
                     custom_log(
                         'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+                if (client_id, request_count, 'forwarded_request', 'drop_checkpt_stmts') in self.failures:
+                    log_msg = 'INFO: Injecting Failure: Forwarded Request: Drop Checkpoint Statements,Client:{} Message:{}'
+                    custom_log(log_msg.format(client_id, request_count))
+                    failure_request_count = self.completed_checkpoint_count + 1
+                    self.failures[(failure_request_count, 'completed_checkpoint', 'drop_checkpt_stmts')] = None
+                    custom_log('INFO: In the next outgoing completed checkpoint proof, '
+                               'omits the first t+1 checkpoint statements')
                 operation = payload['operation']
                 output_cache()
                 custom_log('INFO: Verifying Operation ... ')
@@ -483,6 +497,13 @@ class Replica(process):
             self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_result_sig')] = None
             custom_log(
                 'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+        if (client_id, request_count, 'shuttle', 'drop_checkpt_stmts') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Request Shuttle: Drop Checkpoint Statements,Client:{} Message:{}'
+            custom_log(log_msg.format(client_id, request_count))
+            failure_request_count = self.completed_checkpoint_count + 1
+            self.failures[(failure_request_count, 'completed_checkpoint', 'drop_checkpt_stmts')] = None
+            custom_log('INFO: In the next outgoing completed checkpoint proof, '
+                       'omits the first t+1 checkpoint statements')
         is_verified = verify_order_proof(prev_order_proof)
         next_slot = next(self.slot)
         if not is_verified:
@@ -653,6 +674,14 @@ class Replica(process):
             log_msg = 'Injecting Failure: Result Request: Sleep for {} milliseconds, Client: {} Message: {}'
             custom_log(log_msg.format(sleep_time, client_id, request_count))
             testutil.sleep(sleep_time)
+        if (client_id, request_count, 'result_shuttle', 'drop_checkpt_stmts') in self.failures:
+            log_msg = 'INFO: Injecting Failure: Result Shuttle: Drop Checkpoint Statements,Client:{} Message:{}'
+            custom_log(log_msg.format(client_id, request_count))
+            failure_request_count = self.completed_checkpoint_count + 1
+            self.failures[(failure_request_count, 'completed_checkpoint', 'drop_checkpt_stmts')] = None
+            custom_log('INFO: In the next outgoing completed checkpoint proof, '
+                       'omits the first t+1 checkpoint statements')
+
         result_proof = result_proof._asdict()
         is_verified = verify_result_statements(result, result_proof['result_statements'])
         if is_verified:
