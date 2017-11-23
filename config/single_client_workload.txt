@@ -41,7 +41,7 @@ workload[0] = pseudorandom(233,20)
 # failure scenario are failure-free.
 #failures[0,0] = client_request(2,1), crash()
 #failures[1,2] = result_shuttle(0,1),drop(); shuttle(1,3),omit_send()
-failures[0,1] = completed_checkpoint(0),drop(); wedge_request(0),crash()
+failures[0,1] = completed_checkpoint(0),drop_checkpt_stmts(); new_configuration(0),drop()
 
 # Custom Config
 test_case = 1

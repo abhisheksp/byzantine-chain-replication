@@ -97,7 +97,7 @@ class Olympus(process):
         custom_log('INFO: Starting Replica Node')
         multi_host = bool(config.get('multi_host', 0))
         setup_replica_nodes(multi_host)
-        self.config['current_configuration'] = self.current_configuration
+        self.config['replica_configuration'] = self.current_configuration
         for replica_id in range(1, self.replica_count + 1):
             replica_address = self.replica_addresses[replica_id]
             custom_log('INFO: Creating new replica process at {}'.format(replica_address))
@@ -129,7 +129,7 @@ class Olympus(process):
         while True:
             if await(has_majority()):
                 pass
-            elif timeout(10):
+            elif timeout(6):
                 if self.is_reconfiguring:
                     custom_log('INFO: (Wedge Message) Wedge Statements Not Received - Olympus timed out')
                     custom_log('INFO: (Wedge Message) Sending wedge requests again')
@@ -161,7 +161,7 @@ class Olympus(process):
                     custom_log('INFO: (Caught Up Messages) Running states are not consistent.')
                     send_wedge_requests_again()
                     continue
-            elif timeout(6):
+            elif timeout(4):
                 custom_log('INFO: (Caught Up Messages) Not enough caught up messages received.')
                 send_wedge_requests_again()
                 continue
@@ -218,9 +218,11 @@ class Olympus(process):
         for rid in self.replica_processes:
             custom_log('Sending Kill to Replica : {}'.format(rid))
             send(('kill',), to=self.replica_processes[rid])
-        time.sleep(10)
+        time.sleep(4)
+        custom_log('INFO: (Reconfigure) Setting up new keys for replica and client')
+        setup_signatures()
         self.config['initial_running_state'] = self.consistent_running_state
-        self.config['current_configuration'] = self.current_configuration
+        self.config['replica_configuration'] = self.current_configuration
         self.replica_processes = {}
         for replica_id in range(1, self.replica_count + 1):
             replica_address = self.replica_addresses[replica_id]
@@ -419,6 +421,7 @@ class Olympus(process):
             if await(bool(self.running_states)):
                 pass
             elif timeout(3):
+                custom_log('INFO: Get Running States timed out')
                 continue
             payload = self.running_states[self.current_configuration]
             if (payload['replica_id'] == replica_id and payload['replica_config'] == self.current_configuration and
