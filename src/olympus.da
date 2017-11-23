@@ -40,10 +40,13 @@ class Olympus(process):
         output('INFO: Generating keys for clients ...')
         client_count = config['num_client']
         self.config['client_sks'] = self.signature.generate_client_keys(client_count)
-        output('INFO: Generating keys for replica ...')
-        self.config['replica_sks'] = self.signature.generate_replica_keys(self.replica_count)
+        setup_replica_signatures()
         output('INFO: Generating Olympus signing key ...')
         self.signing_key = self.signature.generate_olympus_keys()
+
+    def setup_replica_signatures():
+        output('INFO: Generating keys for replica ...')
+        self.config['replica_sks'] = self.signature.generate_replica_keys(self.replica_count)
 
     def setup_replica_nodes(multi_host=False):
         replica_addresses = {}
@@ -219,8 +222,8 @@ class Olympus(process):
             custom_log('Sending Kill to Replica : {}'.format(rid))
             send(('kill',), to=self.replica_processes[rid])
         time.sleep(4)
-        custom_log('INFO: (Reconfigure) Setting up new keys for replica and client')
-        setup_signatures()
+        custom_log('INFO: (Reconfigure) Setting up new keys for replicas')
+        setup_replica_signatures()
         self.config['initial_running_state'] = self.consistent_running_state
         self.config['replica_configuration'] = self.current_configuration
         self.replica_processes = {}

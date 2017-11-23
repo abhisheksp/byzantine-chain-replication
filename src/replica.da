@@ -51,8 +51,6 @@ class Replica(process):
         self.outgoing_result_shuttle_count[0] = 0
         failure_scenarios = config['failure_scenarios']
         self.failures = failure_scenarios.get((self.config['replica_configuration'], self.replica_id), {})
-        custom_log('INFO: SELF.FAILURES {}'.format(self.failures))
-        custom_log('INFO: SELF.CONFIGURATION {}'.format(self.current_configuration))
         self.checkpoint_count = 0
         self.completed_checkpoint_count = 0
         self.running_state_count = 0
@@ -60,8 +58,6 @@ class Replica(process):
         self.catchup_message_count = 0
 
     def run():
-        custom_log('INFO: Started Replica {}'.format(self.replica_id))
-        custom_log('INFO: Replica Failures: {}'.format(self.failures))
 
         # FOR DEMO PURPOSE
         outfile = 'replica_state_{}.json'.format(self.replica_id)
