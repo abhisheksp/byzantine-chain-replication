@@ -203,6 +203,7 @@ System successfully handles all the 900 requests.
 Test Case 4:
 Scenario:
 Demonstrate each replica running on separate hosts
+Commands: ./run_main_phase_3_multi_host.sh
 Log File:
 Logs for Client: client.log
 Logs for Olympus: olympus.log
