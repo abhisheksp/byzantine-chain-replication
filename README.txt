@@ -29,25 +29,21 @@ Single Client Workload
 Multiple Client Workload
 
 
-Limitations of existing implementation:
-1. When the result shuttle propagates upstream from the tail back to the head, change_operation() and change_result() triggers do not raise reconfigure request.
-2. Forward request trigger does not verify failures for change_result() and drop_result_statement(). However, these failures can be detected by the algorithm itself. 
-3. Heisenbug: WARNING: Caught exception while processing router message from <..>. Happens rarely and not reproducible.
+Limitations/Bugs of existing implementation:
+1. Multihost - Since we run replicas on a container which is on a different host (on top of a VM), all timeouts needs to be larger than usual.
+2. Retransmissions that occur after head or a non-head replica timeouts can sometimes cause multiple rounds of reconfigurations.
+3. Trigger new_configuration(x) works only as failure[x,_]
+4. Fails in parsing (c, m) pairs in configurations where c, m is more than one digit long
+5. Consistency checks in client is not automated for all configurations. It is done manually.
+6. Catchup messages from Olympus are not verified by replicas
 
 CONTRIBUTIONS:
 
 Contributions from Abhishek:
-Replica - Handling client request. Signature Verification. Order Proofs, Result Proofs, Order Proof Validation
-Main process setup. 
-Designing all clases required in the project classes.
-Failure Injection 6 cases
-
+Setting up nodes on containers, checkpointing (with failure injection), Multihost setup, Replica node orchastration, infrastructure setup.
 
 Contributions from Abhilash:
-Olympus, Client: Handling and receiving requests. Signature Verifications at the client side. Creating process and keys.
-Failure Injection 6 cases.
-Logging
-Documentation
+Reconfiguration - Algorithm and Implementation (with failure injection)
 
 All other portions/cases - Pair Programming
 
@@ -60,8 +56,9 @@ MAIN FILES:
 	olympus.da
 
 /log
-	main.log
+	replica.log
 	client.log
+	olympus.log
 
 /config
     config.txt
@@ -74,31 +71,21 @@ MAIN FILES:
 	stress_1000_7_10.txt
 	stress_2000_11_1.txt
 
-CODE SIZE.
--------------------------------------------------------------------------------
-Language                     files          blank        comment           code
--------------------------------------------------------------------------------
-DAL                              4             74              0            596
-Python                           9             69              3            327
-Bourne Shell                    16             17              0             66
-Markdown                         1              0              0              2
--------------------------------------------------------------------------------
-SUM:                            30            160              3            991
--------------------------------------------------------------------------------
 
-Numbers of non-blank non-comment lines of code - 991
-Algorithm: 434
-Other: 557
-Total:  1154
+
+Numbers of non-blank non-comment lines of code - 2219
+Algorithm: 1110
+Test cases: 1109
+
 
 
 
 LANGUAGE FEATURE USAGE. 
 Count of
-List comprehensions: 0
-Map(Alternative to List comprehension): 7
-Lambdas: 7
-Dictionary comprehensions: 4
+List comprehensions: 1
+Map(Alternative to List comprehension): 8
+Lambdas: 9
+Dictionary comprehensions: 6
 Set comprehensions: 0
 Aggregations: 0
 Quantifications: 2

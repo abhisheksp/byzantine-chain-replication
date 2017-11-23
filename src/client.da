@@ -221,7 +221,6 @@ class Client(process):
             regular_client_workflow()
         end_time = time.time()
         custom_log('elapsed time (seconds): {}'.format(end_time - start_time))
-        # TODO: automatically run consistency check
 
     def custom_log(log_message):
         output('Client: {} {}'.format(self.client_id, log_message))

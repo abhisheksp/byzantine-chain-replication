@@ -61,7 +61,6 @@ class Olympus(process):
                     custom_log('ERR: Failed to Start Replica Node: {}'.format(error))
                     return
                 replica_node_ids.append(replica_node_id)
-            # TODO: is this required?
             time.sleep(4)
             for i, node_id in enumerate(replica_node_ids):
                 replica_node_ip, error = self.docker_wrapper.ip_address(node_id)
@@ -255,8 +254,6 @@ class Olympus(process):
 
     def find_longest_history():
         min_slot = 9999
-        # custom_log('INFO: (INSIDE) Number of wedge messages collected : {}'.format(
-        #     len(self.wedge_messages[self.current_configuration])))
         for wedge_message in self.quorum:
             if wedge_message['checkpointed_slot'] < min_slot:
                 min_slot = wedge_message['checkpointed_slot']
@@ -324,10 +321,8 @@ class Olympus(process):
         for message in self.caught_up_messages[self.current_configuration]:
             l.append(message['hashed_running_state'])
         if l[1:] == l[:-1]:
-            # custom_log('INFO: equal!')
             return l[0], True
         else:
-            # custom_log('INFO: not equal!')
             return None, False
 
     def send_wedge_requests_again():
@@ -459,7 +454,6 @@ class Olympus(process):
                 cached_dict[client_id] = cached_list
                 tempdict[client_id] = cached_list
                 cached_list = []
-        # custom_log('INFO: Formatted dict: {}'.format(cached_dict))
         for client_id, resultstatements in cached_dict.items():
             if is_result_consistent(resultstatements):
                 custom_log('INFO: (Stored Results) Found a Result Statement for client {}'.format(client_id))
@@ -482,15 +476,11 @@ class Olympus(process):
         checkpoints = {}
         for message in self.quorum:
             checkpoints[message['checkpointed_slot']] = []
-        # custom_log('HERE (1): {}'.format(checkpoints))
         for message in self.quorum:
             checkpoints[message['checkpointed_slot']].append(message['running_state'])
-        # custom_log('HERE (2): {}'.format(checkpoints))
         for key, values in checkpoints.items():
             if not running_states_equal(values):
-                # custom_log('HERE (4)')
                 return False
-        # custom_log('HERE (5)')
         return True
 
     def running_states_equal(values):

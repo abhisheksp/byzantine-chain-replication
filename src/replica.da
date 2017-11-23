@@ -193,7 +193,7 @@ class Replica(process):
                     custom_log(log_msg.format(client_id, request_count))
                     self.terminate = True
                     return
-                # TODO: Parameterize Truncate History, ie. Drop only n statements in history
+
                 if (client_id, request_count, 'client_request', 'truncate_history') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Client Request: Truncate History, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
@@ -237,14 +237,16 @@ class Replica(process):
                     failure_request_count = self.outgoing_request_shuttle_count[0] + 1
                     self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
                     custom_log(
-                        'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+                        'INFO: In the next outgoing shuttle message, '
+                        'replica puts an invalid signature on its order statement')
                 if (client_id, request_count, 'client_request', 'invalid_result_sig') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Client Request: Invalid Result Sig, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
                     failure_request_count = self.outgoing_request_shuttle_count[0] + 1
                     self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_result_sig')] = None
                     custom_log(
-                        'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its result statement')
+                        'INFO: In the next outgoing shuttle message, '
+                        'replica puts an invalid signature on its result statement')
                 if (client_id, request_count, 'client_request', 'drop_checkpt_stmts') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Client Request: Drop Checkpoint Statements,Client:{} Message:{}'
                     custom_log(log_msg.format(client_id, request_count))
@@ -326,14 +328,16 @@ class Replica(process):
                     failure_request_count = self.outgoing_request_shuttle_count[0] + 1
                     self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
                     custom_log(
-                        'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+                        'INFO: In the next outgoing shuttle message, '
+                        'replica puts an invalid signature on its order statement')
                 if (client_id, request_count, 'forwarded_request', 'invalid_result_sig') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Forwarded Request: Invalid Result Sig, Client: {} Message: {}'
                     custom_log(log_msg.format(client_id, request_count))
                     failure_request_count = self.outgoing_request_shuttle_count[0] + 1
                     self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_result_sig')] = None
                     custom_log(
-                        'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+                        'INFO: In the next outgoing shuttle message, '
+                        'replica puts an invalid signature on its order statement')
                 if (client_id, request_count, 'forwarded_request', 'drop_checkpt_stmts') in self.failures:
                     log_msg = 'INFO: Injecting Failure: Forwarded Request: Drop Checkpoint Statements,Client:{} Message:{}'
                     custom_log(log_msg.format(client_id, request_count))
@@ -590,7 +594,8 @@ class Replica(process):
             custom_log(log_msg.format(client_id, request_count))
             failure_request_count = self.outgoing_request_shuttle_count[0] + 1
             self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_result_sig')] = None
-            custom_log('INFO: In the next outgoing shuttle message, replica puts an invalid signature on its result statement')
+            custom_log('INFO: In the next outgoing shuttle message, '
+                       'replica puts an invalid signature on its result statement')
         if (client_id, request_count, 'shuttle', 'drop_checkpt_stmts') in self.failures:
             log_msg = 'INFO: Injecting Failure: Request Shuttle: Drop Checkpoint Statements,Client:{} Message:{}'
             custom_log(log_msg.format(client_id, request_count))
@@ -829,7 +834,6 @@ class Replica(process):
         self.checkpoint_count += 1
         request_count = self.checkpoint_count
         all_good = True
-        # self.failures = [(2, 'checkpoint', 'replace_me'), (12, 'garbage', 'garbage')]
         if (request_count, 'checkpoint', 'crash') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: crash())'
             custom_log(log_msg.format(request_count))
@@ -858,7 +862,8 @@ class Replica(process):
             custom_log(log_msg.format(request_count))
             failure_request_count = self.outgoing_request_shuttle_count[0] + 1
             self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
-            custom_log('INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+            custom_log('INFO: In the next outgoing shuttle message, '
+                       'replica puts an invalid signature on its order statement')
         if (request_count, 'checkpoint', 'truncate_history') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: checkpoint({}), Failure: truncate_history())'
             custom_log(log_msg.format(request_count))
@@ -910,7 +915,6 @@ class Replica(process):
                 handle_checkpoint_proof(prev_checkpoint_proof)
 
     def handle_checkpoint_proof(prev_checkpoint_proof):
-        # To-Do: Verification
         is_verified = verify_checkpoint_proof(prev_checkpoint_proof)
         if is_verified:
             custom_log('INFO: Checkpoint Proof Verification Successful')
@@ -936,8 +940,7 @@ class Replica(process):
         self.completed_checkpoint_count += 1
         request_count = self.completed_checkpoint_count
         all_good = True
-        # self.failures = [(2, 'completed_checkpoint', 'increment_slot'), (12, 'garbage', 'garbage')]
-        # TODO: FIX compile time errors, ex: request_shuttle_count[0] => self.request_shuttle_count[0]
+
         if (request_count, 'completed_checkpoint', 'crash') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: completed_checkpoint({}), Failure: crash())'
             custom_log(log_msg.format(request_count))
@@ -1177,6 +1180,7 @@ class Replica(process):
                 'running_state': self.running_state,
                 'checkpointed_slot': self.checkpointed_slot
             }
+
             signed_wedge_message = serialize_and_sign(wedge_message)
             wedge_message_payload = {'replica_id': self.replica_id, 'payload': signed_wedge_message}
             custom_log('INFO: Sending wedge statement to Olympus')
@@ -1228,8 +1232,8 @@ class Replica(process):
             custom_log(log_msg.format(request_count))
             failure_request_count = self.outgoing_request_shuttle_count[0] + 1
             self.failures[(0, failure_request_count, 'outgoing_shuttle', 'invalid_order_sig')] = None
-            custom_log(
-                'INFO: In the next outgoing shuttle message, replica puts an invalid signature on its order statement')
+            custom_log('INFO: In the next outgoing shuttle message, '
+                        'replica puts an invalid signature on its order statement')
 
         if (request_count, 'catch_up', 'truncate_history') in self.failures:
             log_msg = 'INFO: Injecting Failure. (Trigger: catch_up({}), Failure: truncate_history())'
@@ -1450,7 +1454,6 @@ class Replica(process):
     def truncate_history(checkpoint_proof):
         custom_log('History Before Truncating: {}'.format(self.history))
         custom_log('INFO: Truncating History ...')
-        # list = [checkpoint['slot'] for checkpoint in checkpoint_proof['checkpoint_statements'] if checkpoint['replica_id'] == self.replica_id]
         list_of_slots = []
         for checkpoint in checkpoint_proof['checkpoint_statements']:
             if checkpoint['replica_id'] == self.replica_id:
@@ -1462,7 +1465,6 @@ class Replica(process):
 
     def verify_checkpoint_proof(checkpoint_proof):
         custom_log('INFO: Checkpoint Proof Verification')
-        # TODO - Verification logic
         return True
 
     def validate_completed_checkpoint(checkpoint_proof):
