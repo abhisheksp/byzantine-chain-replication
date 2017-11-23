@@ -28,3 +28,4 @@ workload[2] = pseudorandom(192,300)
 
 # FAILURE SCENARIO
 # no failures
+multi_host=1
