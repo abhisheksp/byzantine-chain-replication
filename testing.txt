@@ -114,3 +114,108 @@ Logs for Client: client.log
 Replica, Configuration and Olympus related logs: main.log
 Programmatic Check:
 Outcome: Success: All three cases were handled successfully without crashes.
+
+Phase 3 Test Cases:
+Test Case 1:
+Scenario:
+The Head replica injects a sleep failure and triggers a reconfiguration
+This test case demonstrates the following features:
+Client:
+    Client sends configuration request for every ten operation requests or before retransmitting a request.
+Olympus:
+    Olympus sends wedge requests
+    Olympus validates wedge messages sent by replicas
+    Olympus selects the quorum and checks for its consistency
+    Olympus computes the longest history and asks other replicas to catchup
+    Olympus verifies the running states of all the replicas in the quorum by sending 'get_running_state' messages
+    If consistent state is found, it is used the initial running state for the new configuration
+    else Olympus finds a new quorum
+
+Client Request: workload[0] = pseudorandom(233,20)
+Failure Scenario:
+failures[0,0] = client_request(0,9), sleep(5000)
+Commands:
+./run_main_phase_3_2.sh
+> cd src
+> python state_test.py
+Log File:
+Logs for Client: client.log
+Logs for Olympus: olympus.log
+Logs for Replica: replica.log
+Programmatic Check:
+run_state_consistency_test.sh
+To check if the local state of the client is same as the response received.
+Outcome:
+System reconfigures successfully and responds to all the client requests. The states are consistent
+
+
+Test Case 2:
+Scenario:
+Replica 2 upon receiving the first checkpoint message in a checkpoint shuttle, will put an invalid signature on
+its order statement. Order Proof verification fails in the next replica and Reconfiguration request is raised. Olympus then sends a
+wedge statement to all the replicas and forms a quorum, we observe that it usually takes two reconfigurations to find the
+consistent state. The entire process covers the following cases:
+1. Head and Non Head timeouts (reconfiguration-request if timeout ) CASE 1 and CASE 2
+2. Detect provable misbehavior and send reconfiguration-request - Order Proof Validation fails
+3. head: periodically initiate checkpoint, send checkpoint shuttle
+4. non-head: add signed checkpoint proof, send updated checkpoint shuttle
+5. handle completed checkpoint shuttle: validate completed checkpoint proof
+6. delete history prefix, forward completed checkpoint proof
+7. handle catch-up message, execute operations, send caught-up message
+
+Client Request: Pseudorandom workload, 1 client, 20 requests.
+Failure Scenario:
+failures[0,1] = checkpoint(0),invalid_order_sig(); catch_up(0),drop()
+OR/AND
+failures[0,1] = complete_checkpoint(0),drop_checkpt_stmts()
+
+Commands: run_main_phase_3_2.sh
+Log File:
+Logs for Client: client.log
+Logs for Olympus: olympus.log
+Logs for Replica: replica.log
+
+Programmatic Check:
+run_state_consistency_test.sh
+To check if the local state of the client is same as the response received.
+Outcome:
+System reconfigures successfully and responds to all the client requests. The states are consistent
+
+Test Case 3:
+
+Scenario:
+Runs the perform900 test case
+Replicas: 7
+Client Request: Pseudorandom workload, 3 client, 300 requests, total 900 requests
+
+Commands: run_main_phase_3_2.sh
+Log File:
+Logs for Client: client.log
+Logs for Olympus: olympus.log
+Logs for Replica: replica.log
+
+Programmatic Check:
+run_state_consistency_test.sh
+To check if the local state of the client is same as the response received.
+Outcome:
+System successfully handles all the 900 requests.
+
+Test Case 4:
+Scenario:
+Demonstrate each replica running on separate hosts
+Log File:
+Logs for Client: client.log
+Logs for Olympus: olympus.log
+Logs for Replica: replica.log
+Outcome:
+System successfully runs replicas on separate hosts
+
+PERFORMANCE EVALUATION
+
+Raft: 13.676953554153442 seconds
+Byzantine Chain Replication:
+    Single Host: 66.50380516052246 seconds
+    Multiple Host: 70.55077481269836 seconds.
+Note:
+Multiple Host: Client and replica on host1 and each replica on its own host
+Single Host: Client and replica on host1 and all replicas on host2
