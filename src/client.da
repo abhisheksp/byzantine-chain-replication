@@ -39,6 +39,9 @@ class Client(process):
         custom_log('INFO: Received configuration Response, Payload: {}'.format(payload))
         self.is_reconfiguring = payload['is_reconfiguring']
         received_configuration = payload['configuration']
+        if 'signature' in payload:
+            custom_log('INFO: Received new signatures')
+            self.signature = payload['signature']
         if self.is_reconfiguring:
             custom_log('INFO: Received latest configuration from Olympus')
             custom_log('INFO: Olympus is in the middle of a Reconfiguration')
@@ -76,6 +79,8 @@ class Client(process):
             else:
                 log_msg = 'INFO: Dropping Duplicate Response from Replica: {}, Payload: {}'
                 custom_log(log_msg.format(replica_id, payload))
+        else:
+            custom_log('INFO: NOT VERIFIED')
 
     def receive(msg=('error', payload)):
         replica_id, signed_payload = payload['replica_id'], payload['payload']

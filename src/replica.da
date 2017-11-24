@@ -692,6 +692,7 @@ class Replica(process):
                 result_proof = testutil.drop_result_stmt(result_proof)
                 custom_log('INFO: New Result Statements Length: {}'.format(len(result_proof['result_statements'])))
             result_shuttle_payload = serialize_and_sign({'result': result, 'result_proof': result_proof})
+            self.result_shuttle_cache[(client_id, request_id)] = self.factory.parse_result_shuttle({'result': result, 'result_proof': result_proof})
             result_shuttle = self.factory.new_result_shuttle(result_shuttle_payload)
             # FOR DEMO: order changed
             custom_log('INFO: TAIL: Forwarding result to client. Forwarding result shuttle back in the chain.')
