@@ -71,9 +71,16 @@ MAIN FILES:
 	stress_1000_7_10.txt
 	stress_2000_11_1.txt
 
+-------------------------------------------------------------------------------
+Language                     files          blank        comment           code
+-------------------------------------------------------------------------------
+DAL                              4            183              1           2160
+Python                          11            118              5            553
+-------------------------------------------------------------------------------
+SUM:                            15            301              6           2713
+-------------------------------------------------------------------------------
 
-
-Numbers of non-blank non-comment lines of code - 2219
+Total number of non-blank non-comment lines of code - 2713
 Algorithm: 1110
 Test cases: 1109
 
@@ -85,7 +92,7 @@ Count of
 List comprehensions: 1
 Map(Alternative to List comprehension): 8
 Lambdas: 9
-Dictionary comprehensions: 6
+Dictionary comprehensions: 10
 Set comprehensions: 0
 Aggregations: 0
 Quantifications: 2
