@@ -382,6 +382,7 @@ class Olympus(process):
                 if not is_history_consistent(q_list[i], q_list[j]):
                     custom_log('INFO: (Quorum) Quorum had inconsistent histories')
                     return False
+
         return True
 
     def is_history_consistent(h1, h2):
@@ -495,7 +496,7 @@ class Olympus(process):
 
     def verified_client_operations(history):
         if not history:
-            return False
+            return True
         for orderproof in history:
             client_id = orderproof['client_id']
             signed_operation = orderproof['signed_operation']
